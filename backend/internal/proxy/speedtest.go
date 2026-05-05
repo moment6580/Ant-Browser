@@ -66,13 +66,32 @@ func SpeedTest(
 		testURL = cfg.URLs[0]
 	}
 
-	mapping, err := proxyConfigToMapping(src)
+	resolvedSrc := src
+	if IsChainSocks5Proxy(src) {
+		if xrayMgr == nil {
+			log.Warn("链式代理测速缺少 Xray 管理器，降级到 TCP ping",
+				logger.F("proxy_id", proxyId),
+			)
+			return tcpPingFallback(proxyId, src, cfg.TCPTimeout, log)
+		}
+		bridgeSocksURL, bridgeErr := xrayMgr.EnsureBridge(src, proxies, proxyId)
+		if bridgeErr != nil {
+			log.Warn("链式代理桥接失败，降级到 TCP ping",
+				logger.F("proxy_id", proxyId),
+				logger.F("error", bridgeErr.Error()),
+			)
+			return tcpPingFallback(proxyId, src, cfg.TCPTimeout, log)
+		}
+		resolvedSrc = strings.TrimSpace(bridgeSocksURL)
+	}
+
+	mapping, err := proxyConfigToMapping(resolvedSrc)
 	if err != nil {
 		log.Warn("代理配置解析失败，降级到 TCP ping",
 			logger.F("proxy_id", proxyId),
 			logger.F("error", err.Error()),
 		)
-		return tcpPingFallback(proxyId, src, cfg.TCPTimeout, log)
+		return tcpPingFallback(proxyId, resolvedSrc, cfg.TCPTimeout, log)
 	}
 
 	proxyInstance, err := adapter.ParseProxy(mapping)
@@ -82,7 +101,7 @@ func SpeedTest(
 			logger.F("error", err.Error()),
 			logger.F("type", mapping["type"]),
 		)
-		return tcpPingFallback(proxyId, src, cfg.TCPTimeout, log)
+		return tcpPingFallback(proxyId, resolvedSrc, cfg.TCPTimeout, log)
 	}
 
 	return unifiedDelayTest(proxyId, proxyInstance, testURL, cfg.Timeout)

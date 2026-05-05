@@ -32,6 +32,7 @@ type ScriptRunRequest struct {
 	ParamsText        string `json:"paramsText"`
 	UseScriptSelector bool   `json:"useScriptSelector"`
 	UseScriptParams   bool   `json:"useScriptParams"`
+	TimeoutMs         int    `json:"timeoutMs,omitempty"`
 }
 
 type ScriptRunStore struct {

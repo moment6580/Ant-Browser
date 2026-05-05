@@ -178,6 +178,7 @@ export namespace automation {
 	    paramsText: string;
 	    useScriptSelector: boolean;
 	    useScriptParams: boolean;
+	    timeoutMs: number;
 
 	    static createFrom(source: any = {}) {
 	        return new ScriptRunRequest(source);
@@ -190,8 +191,9 @@ export namespace automation {
 	        this.paramsText = source["paramsText"];
 	        this.useScriptSelector = source["useScriptSelector"];
 	        this.useScriptParams = source["useScriptParams"];
+	        this.timeoutMs = source["timeoutMs"];
 	    }
-	}
+}
 
 
 

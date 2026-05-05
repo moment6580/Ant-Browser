@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -28,15 +29,24 @@ func (a *App) ensurePlaywrightTargetReady(selector map[string]any) error {
 	return nil
 }
 
-func (a *App) runPlaywrightScript(script automation.ScriptRecord, input automation.ScriptRunRequest) (string, string, string) {
+func (a *App) runPlaywrightScript(ctx context.Context, script automation.ScriptRecord, input automation.ScriptRunRequest) (string, string, string) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if a.automationMgr == nil {
 		return "", "脚本执行失败", "automation runtime manager is not initialized"
 	}
 	if a.config == nil || !a.config.Automation.Enabled {
 		return "", "脚本执行失败", "自动化支持尚未启用"
 	}
-	if err := a.automationMgr.EnsureInstalled(a.ctx); err != nil {
+	if err := ctx.Err(); err != nil {
+		return "", "脚本执行失败", automationRunContextErrorMessage(err)
+	}
+	if err := a.automationMgr.EnsureInstalled(ctx); err != nil {
 		return "", "脚本执行失败", err.Error()
+	}
+	if err := ctx.Err(); err != nil {
+		return "", "脚本执行失败", automationRunContextErrorMessage(err)
 	}
 
 	state := a.automationMgr.CurrentState()
@@ -53,6 +63,9 @@ func (a *App) runPlaywrightScript(script automation.ScriptRecord, input automati
 	if err := a.ensurePlaywrightTargetReady(selector); err != nil {
 		return "", "脚本执行失败", err.Error()
 	}
+	if err := ctx.Err(); err != nil {
+		return "", "脚本执行失败", automationRunContextErrorMessage(err)
+	}
 	params, err := parseAutomationJSONObject(paramsText, false)
 	if err != nil {
 		return "", "脚本执行失败", err.Error()
@@ -68,8 +81,11 @@ func (a *App) runPlaywrightScript(script automation.ScriptRecord, input automati
 		return "", "脚本执行失败", err.Error()
 	}
 	defer cleanup()
+	if err := ctx.Err(); err != nil {
+		return "", "脚本执行失败", automationRunContextErrorMessage(err)
+	}
 
-	taskResult, err := a.automationMgr.RunScriptTask(a.ctx, automation.ScriptTaskRequest{
+	taskResult, err := a.automationMgr.RunScriptTask(ctx, automation.ScriptTaskRequest{
 		TaskKey:          "script:" + script.ID,
 		ScriptPath:       scriptPath,
 		Selector:         selector,
@@ -78,6 +94,7 @@ func (a *App) runPlaywrightScript(script automation.ScriptRecord, input automati
 		LaunchAuthHeader: authHeader,
 		LaunchAuthValue:  authValue,
 		ArtifactDir:      artifactDir,
+		Timeout:          automationScriptRunTimeout(input),
 	})
 	if err != nil {
 		return "", "脚本执行失败", err.Error()

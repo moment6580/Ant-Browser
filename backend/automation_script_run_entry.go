@@ -1,12 +1,19 @@
 package backend
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"ant-chrome/backend/internal/automation"
+)
+
+const (
+	automationScriptRunDefaultTimeout = 5 * time.Minute
+	automationScriptRunMinTimeout     = 1 * time.Second
+	automationScriptRunMaxTimeout     = 30 * time.Minute
 )
 
 func (a *App) automationScriptRunStore() *automation.ScriptRunStore {
@@ -43,9 +50,16 @@ func (a *App) AutomationScriptRunWithOptions(input automation.ScriptRunRequest) 
 	run.ScriptName = script.Name
 	run.ScriptType = script.Type
 
+	runCtx := a.ctx
+	if runCtx == nil {
+		runCtx = context.Background()
+	}
+	runCtx, cancel := context.WithTimeout(runCtx, automationScriptRunTimeout(input))
+	defer cancel()
+
 	switch script.Type {
 	case "launch-api":
-		resultText, summary, errText := a.runLaunchAPIScript(script, input)
+		resultText, summary, errText := a.runLaunchAPIScript(runCtx, script, input)
 		run.ResultText = resultText
 		run.Summary = summary
 		run.Error = errText
@@ -53,7 +67,7 @@ func (a *App) AutomationScriptRunWithOptions(input automation.ScriptRunRequest) 
 			run.Status = "success"
 		}
 	case "playwright-cdp":
-		resultText, summary, errText := a.runPlaywrightScript(script, input)
+		resultText, summary, errText := a.runPlaywrightScript(runCtx, script, input)
 		run.ResultText = resultText
 		run.Summary = summary
 		run.Error = errText
@@ -66,6 +80,30 @@ func (a *App) AutomationScriptRunWithOptions(input automation.ScriptRunRequest) 
 	}
 
 	return a.finalizeAutomationScriptRun(run, startedAt)
+}
+
+func automationScriptRunTimeout(input automation.ScriptRunRequest) time.Duration {
+	if input.TimeoutMs <= 0 {
+		return automationScriptRunDefaultTimeout
+	}
+	timeout := time.Duration(input.TimeoutMs) * time.Millisecond
+	if timeout < automationScriptRunMinTimeout {
+		return automationScriptRunMinTimeout
+	}
+	if timeout > automationScriptRunMaxTimeout {
+		return automationScriptRunMaxTimeout
+	}
+	return timeout
+}
+
+func automationRunContextErrorMessage(err error) string {
+	if err == context.DeadlineExceeded {
+		return "自动化任务超时，已终止"
+	}
+	if err == context.Canceled {
+		return "自动化任务已取消"
+	}
+	return err.Error()
 }
 
 func (a *App) finalizeAutomationScriptRun(run automation.ScriptRunRecord, startedAt time.Time) (*automation.ScriptRunRecord, error) {

@@ -1,5 +1,7 @@
 package automation
 
+import "time"
+
 type ScriptTaskRequest struct {
 	TaskKey          string         `json:"taskKey"`
 	ScriptPath       string         `json:"scriptPath"`
@@ -9,6 +11,7 @@ type ScriptTaskRequest struct {
 	LaunchAuthHeader string         `json:"launchAuthHeader,omitempty"`
 	LaunchAuthValue  string         `json:"launchAuthValue,omitempty"`
 	ArtifactDir      string         `json:"artifactDir,omitempty"`
+	Timeout          time.Duration  `json:"-"`
 }
 
 type ScriptTaskResult struct {

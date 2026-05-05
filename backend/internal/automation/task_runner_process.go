@@ -80,6 +80,10 @@ func stopTaskProcess(cmd *exec.Cmd) error {
 		if err := killCmd.Run(); err == nil {
 			return nil
 		}
+	} else if cmd.Process.Pid > 0 {
+		if err := killProcessGroup(cmd.Process.Pid); err == nil {
+			return nil
+		}
 	}
 	err := cmd.Process.Kill()
 	if err == nil {

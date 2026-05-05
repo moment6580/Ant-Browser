@@ -65,6 +65,12 @@ func ValidateProxyConfig(proxyConfig string, proxies []config.BrowserProxy, prox
 	if strings.HasPrefix(l, "http://") || strings.HasPrefix(l, "https://") || strings.HasPrefix(l, "socks5://") {
 		return true, ""
 	}
+	if IsChainSocks5Proxy(src) {
+		if _, err := ParseChainSocks5Config(src); err != nil {
+			return false, fmt.Sprintf("链式代理配置解析失败: %v", err)
+		}
+		return true, ""
+	}
 	if IsSingBoxProtocol(src) {
 		if _, err := BuildSingBoxOutbound(src); err != nil {
 			return false, fmt.Sprintf("代理配置解析失败: %v", err)
@@ -101,6 +107,9 @@ func RequiresBridge(proxyConfig string, proxies []config.BrowserProxy, proxyId s
 	l := strings.ToLower(src)
 	if strings.HasPrefix(l, "http://") || strings.HasPrefix(l, "https://") || strings.HasPrefix(l, "socks5://") {
 		return false
+	}
+	if IsChainSocks5Proxy(src) {
+		return true
 	}
 	if strings.HasPrefix(l, "hysteria://") || strings.HasPrefix(l, "hysteria2://") {
 		return false

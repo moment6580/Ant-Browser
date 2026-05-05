@@ -79,7 +79,26 @@ func TestRealConnectivityWithSingBox(
 
 	var client *http.Client
 
-	if IsSingBoxProtocol(src) {
+	if IsChainSocks5Proxy(src) {
+		if xrayMgr == nil {
+			return TestResult{ProxyId: proxyId, Ok: false, Error: "xray 管理器未初始化"}
+		}
+		socks5Addr, err := xrayMgr.EnsureBridge(src, proxies, proxyId)
+		if err != nil {
+			return TestResult{ProxyId: proxyId, Ok: false, Error: fmt.Sprintf("链式代理桥接启动失败: %v", err)}
+		}
+		socks5Host := strings.TrimPrefix(socks5Addr, "socks5://")
+		dialer, err := xproxy.SOCKS5("tcp", socks5Host, nil, xproxy.Direct)
+		if err != nil {
+			return TestResult{ProxyId: proxyId, Ok: false, Error: fmt.Sprintf("SOCKS5 dialer 创建失败: %v", err)}
+		}
+		contextDialer, ok := dialer.(xproxy.ContextDialer)
+		if !ok {
+			return TestResult{ProxyId: proxyId, Ok: false, Error: "SOCKS5 dialer 不支持 ContextDialer"}
+		}
+		transport := &http.Transport{DialContext: contextDialer.DialContext}
+		client = &http.Client{Transport: transport, Timeout: timeout}
+	} else if IsSingBoxProtocol(src) {
 		if singboxMgr == nil {
 			return TestResult{ProxyId: proxyId, Ok: false, Error: "sing-box 管理器未初始化，无法测试 hysteria2"}
 		}
