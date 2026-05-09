@@ -1,6 +1,9 @@
 package proxy
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestProxyConfigToMappingStandardProxy(t *testing.T) {
 	t.Parallel()
@@ -24,6 +27,33 @@ func TestProxyConfigToMappingStandardProxy(t *testing.T) {
 	}
 	if got := mapping["password"]; got != "pass" {
 		t.Fatalf("password = %v, want pass", got)
+	}
+}
+
+func TestProxyConfigToMappingEscapedCredentials(t *testing.T) {
+	t.Parallel()
+
+	mapping, err := proxyConfigToMapping("http://user%40mail:p%40ss%3Aword@example.com:8080")
+	if err != nil {
+		t.Fatalf("proxyConfigToMapping returned error: %v", err)
+	}
+	if got := mapping["username"]; got != "user@mail" {
+		t.Fatalf("username = %v, want user@mail", got)
+	}
+	if got := mapping["password"]; got != "p@ss:word" {
+		t.Fatalf("password = %v, want p@ss:word", got)
+	}
+}
+
+func TestProxyEndpointDropsCredentials(t *testing.T) {
+	t.Parallel()
+
+	endpoint, err := proxyEndpoint("http://user:pass@example.com:8080")
+	if err != nil {
+		t.Fatalf("proxyEndpoint returned error: %v", err)
+	}
+	if endpoint != "example.com:8080" {
+		t.Fatalf("endpoint = %q, want example.com:8080", endpoint)
 	}
 }
 
@@ -74,5 +104,16 @@ func TestURLToMeta(t *testing.T) {
 	}
 	if !meta.DstIP.IsValid() || meta.DstIP.String() != "1.2.3.4" {
 		t.Fatalf("DstIP = %v, want 1.2.3.4", meta.DstIP)
+	}
+}
+
+func TestDefaultProxyCheckURLsAreConfigured(t *testing.T) {
+	t.Parallel()
+
+	if strings.TrimSpace(DefaultSpeedTestURL) == "" {
+		t.Fatalf("DefaultSpeedTestURL must not be empty")
+	}
+	if strings.TrimSpace(DefaultIPHealthURL) == "" {
+		t.Fatalf("DefaultIPHealthURL must not be empty")
 	}
 }

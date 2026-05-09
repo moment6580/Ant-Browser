@@ -56,13 +56,17 @@ func ParseChainSocks5Config(src string) (*chainSocks5Config, error) {
 	if cfg.LocalPort < 0 || cfg.LocalPort > 65535 {
 		return nil, fmt.Errorf("本地监听端口必须在 1-65535 之间")
 	}
-	if cfg.First.Protocol == "" {
-		cfg.First.Protocol = "socks5"
-	}
-	if cfg.Second.Protocol == "" {
-		cfg.Second.Protocol = "socks5"
-	}
+	cfg.First.Protocol = normalizeChainHopProtocol(cfg.First.Protocol)
+	cfg.Second.Protocol = normalizeChainHopProtocol(cfg.Second.Protocol)
 	return &cfg, nil
+}
+
+func normalizeChainHopProtocol(protocol string) string {
+	normalized := strings.ToLower(strings.TrimSpace(protocol))
+	if normalized == "" {
+		return "socks5"
+	}
+	return normalized
 }
 
 func validateChainSocks5Hop(label string, hop chainSocks5Hop) error {
@@ -73,8 +77,8 @@ func validateChainSocks5Hop(label string, hop chainSocks5Hop) error {
 		return fmt.Errorf("%s代理端口必须在 1-65535 之间", label)
 	}
 	protocol := strings.ToLower(strings.TrimSpace(hop.Protocol))
-	if protocol != "" && protocol != "socks5" {
-		return fmt.Errorf("%s协议仅支持 socks5", label)
+	if protocol != "" && protocol != "socks5" && protocol != "http" {
+		return fmt.Errorf("%s协议仅支持 http 或 socks5", label)
 	}
 	if strings.TrimSpace(hop.Password) != "" && strings.TrimSpace(hop.Username) == "" {
 		return fmt.Errorf("%s填写密码时请同时填写账号", label)

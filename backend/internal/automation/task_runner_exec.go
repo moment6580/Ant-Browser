@@ -21,6 +21,14 @@ func (m *Manager) RunScriptTask(ctx context.Context, req ScriptTaskRequest) (Scr
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	timeoutLimit := req.Timeout
+	if req.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, req.Timeout)
+		defer cancel()
+	} else if deadline, ok := ctx.Deadline(); ok {
+		timeoutLimit = time.Until(deadline)
+	}
 
 	state := m.CurrentState()
 	if !state.Ready {
@@ -58,6 +66,7 @@ func (m *Manager) RunScriptTask(ctx context.Context, req ScriptTaskRequest) (Scr
 		payload,
 		"自动化 script task 已启动",
 		"自动化 script task 已完成",
+		timeoutLimit,
 	)
 	if err != nil {
 		return ScriptTaskResult{}, err
@@ -87,7 +96,7 @@ func (m *Manager) RunScriptTask(ctx context.Context, req ScriptTaskRequest) (Scr
 	return result, nil
 }
 
-func (m *Manager) executeTask(ctx context.Context, taskKey string, payload taskRunnerPayload, startMessage string, completeMessage string) (string, taskRunnerResponse, string, int64, error) {
+func (m *Manager) executeTask(ctx context.Context, taskKey string, payload taskRunnerPayload, startMessage string, completeMessage string, timeoutLimit time.Duration) (string, taskRunnerResponse, string, int64, error) {
 	taskID, err := m.registerTask(taskKey)
 	if err != nil {
 		return "", taskRunnerResponse{}, "", 0, err
@@ -103,7 +112,11 @@ func (m *Manager) executeTask(ctx context.Context, taskKey string, payload taskR
 	state := m.CurrentState()
 	cmd := exec.CommandContext(ctx, state.NodePath, state.RunnerPath, payloadPath)
 	cmd.Dir = state.RuntimeDir
-	hideWindow(cmd)
+	prepareTaskCommand(cmd)
+	cmd.Cancel = func() error {
+		return stopTaskProcess(cmd)
+	}
+	cmd.WaitDelay = 5 * time.Second
 
 	startedAt := time.Now()
 	m.attachTaskCommand(taskID, cmd)
@@ -118,6 +131,21 @@ func (m *Manager) executeTask(ctx context.Context, taskKey string, payload taskR
 	output, runErr := cmd.CombinedOutput()
 	durationMs := time.Since(startedAt).Milliseconds()
 	if runErr != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			_ = stopTaskProcess(cmd)
+			message := taskContextErrorMessage(ctxErr, timeoutLimit)
+			m.emitTaskEvent(TaskEvent{
+				TaskID:     taskID,
+				ProfileID:  taskKey,
+				Phase:      "failed",
+				Message:    message,
+				StartedAt:  startedAt.Format(time.RFC3339),
+				FinishedAt: time.Now().Format(time.RFC3339),
+				DurationMs: durationMs,
+			})
+			return "", taskRunnerResponse{}, "", durationMs, fmt.Errorf("%s", message)
+		}
+
 		message := strings.TrimSpace(string(output))
 		if message == "" {
 			message = runErr.Error()
@@ -150,6 +178,32 @@ func (m *Manager) executeTask(ctx context.Context, taskKey string, payload taskR
 	})
 
 	return taskID, runnerResp, string(output), durationMs, nil
+}
+
+func taskContextErrorMessage(err error, timeoutLimit time.Duration) string {
+	if err == context.DeadlineExceeded {
+		if timeoutText := formatTaskTimeout(timeoutLimit); timeoutText != "" {
+			return fmt.Sprintf("自动化任务超时，已终止（上限 %s）", timeoutText)
+		}
+		return "自动化任务超时，已终止"
+	}
+	if err == context.Canceled {
+		return "自动化任务已取消"
+	}
+	return err.Error()
+}
+
+func formatTaskTimeout(timeout time.Duration) string {
+	if timeout <= 0 {
+		return ""
+	}
+	if timeout >= time.Minute && timeout%time.Minute == 0 {
+		return fmt.Sprintf("%d 分钟", int64(timeout/time.Minute))
+	}
+	if timeout >= time.Second && timeout%time.Second == 0 {
+		return fmt.Sprintf("%d 秒", int64(timeout/time.Second))
+	}
+	return fmt.Sprintf("%d 毫秒", timeout.Milliseconds())
 }
 
 func (m *Manager) writeTaskPayload(payload taskRunnerPayload) (string, error) {

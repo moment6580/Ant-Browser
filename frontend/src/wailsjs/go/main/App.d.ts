@@ -3,8 +3,8 @@
 import {automation} from '../models';
 import {backup} from '../models';
 import {config} from '../models';
-import {browser} from '../models';
 import {backend} from '../models';
+import {browser} from '../models';
 import {logger} from '../models';
 import {launchcode} from '../models';
 import {time} from '../models';
@@ -71,6 +71,8 @@ export function BookmarkReset():Promise<void>;
 
 export function BookmarkSave(arg1:Array<config.BrowserBookmark>):Promise<void>;
 
+export function BookmarkSyncToProfiles():Promise<backend.BookmarkSyncResult>;
+
 export function BrowserClearCookies(arg1:string):Promise<void>;
 
 export function BrowserCoreDelete(arg1:string):Promise<void>;
@@ -104,6 +106,8 @@ export function BrowserInstanceRestart(arg1:string):Promise<browser.Profile>;
 export function BrowserInstanceStart(arg1:string):Promise<browser.Profile>;
 
 export function BrowserInstanceStartByCode(arg1:string):Promise<browser.Profile>;
+
+export function BrowserInstanceStartDirect(arg1:string):Promise<browser.Profile>;
 
 export function BrowserInstanceStartWithParams(arg1:string,arg2:Array<string>,arg3:Array<string>,arg4:boolean):Promise<browser.Profile>;
 
@@ -193,6 +197,8 @@ export function GetLogLevel():Promise<string>;
 
 export function GetMemoryStats():Promise<Record<string, any>>;
 
+export function GetProxyCheckSettings():Promise<config.ProxyCheckConfig>;
+
 export function GetRunningInstances():Promise<Array<browser.Profile>>;
 
 export function InstallAutomationRuntime():Promise<Record<string, any>>;
@@ -224,6 +230,8 @@ export function SaveAutomationSettings(arg1:boolean,arg2:boolean):Promise<Record
 export function SaveBrowserProxies(arg1:Array<config.BrowserProxy>):Promise<void>;
 
 export function SaveBrowserSettings(arg1:browser.Settings):Promise<void>;
+
+export function SaveProxyCheckSettings(arg1:config.ProxyCheckConfig):Promise<void>;
 
 export function SetLogLevel(arg1:string):Promise<void>;
 

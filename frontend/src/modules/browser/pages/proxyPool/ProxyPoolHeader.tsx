@@ -5,6 +5,7 @@ interface ProxyPoolHeaderProps {
   hasURLImportSources: boolean
   onCheckAllIPHealth: () => void
   onOpenImport: () => void
+  onOpenSettings: () => void
   onRefreshAllSources: () => void
   onTestAll: () => void
   refreshingAllSources: boolean
@@ -17,6 +18,7 @@ export function ProxyPoolHeader({
   hasURLImportSources,
   onCheckAllIPHealth,
   onOpenImport,
+  onOpenSettings,
   onRefreshAllSources,
   onTestAll,
   refreshingAllSources,
@@ -30,6 +32,13 @@ export function ProxyPoolHeader({
         <p className="text-sm text-[var(--color-text-muted)] mt-1">管理代理配置，支持 Clash 订阅、HTTP、HTTPS、SOCKS5</p>
       </div>
       <div className="flex gap-2">
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={onOpenSettings}
+        >
+          检测设置
+        </Button>
         <Button
           size="sm"
           variant="secondary"

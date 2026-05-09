@@ -116,13 +116,20 @@ func (a *App) AutomationDemoDeleteProfile(profileId string) (map[string]interfac
 }
 
 func (a *App) automationDemoRequest(method string, apiPath string, body any) (int, map[string]interface{}, error) {
+	return a.automationDemoRequestWithContext(context.Background(), method, apiPath, body)
+}
+
+func (a *App) automationDemoRequestWithContext(ctx context.Context, method string, apiPath string, body any) (int, map[string]interface{}, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	baseURL, authHeader, authValue, err := a.automationDemoEndpoint()
 	if err != nil {
 		return 0, nil, err
 	}
 
 	requestURL := strings.TrimRight(baseURL, "/") + apiPath
-	ctx, cancel := context.WithTimeout(context.Background(), automationDemoTimeout)
+	ctx, cancel := context.WithTimeout(ctx, automationDemoTimeout)
 	defer cancel()
 
 	var reader io.Reader
@@ -147,6 +154,9 @@ func (a *App) automationDemoRequest(method string, apiPath string, body any) (in
 
 	resp, err := (&http.Client{Timeout: automationDemoTimeout}).Do(req)
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return 0, nil, fmt.Errorf("call launch api failed: %w", ctxErr)
+		}
 		return 0, nil, fmt.Errorf("call launch api failed: %w", err)
 	}
 	defer resp.Body.Close()

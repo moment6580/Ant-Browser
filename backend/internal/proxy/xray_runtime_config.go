@@ -9,6 +9,22 @@ import (
 )
 
 func (m *XrayManager) buildRuntimeConfig(key string, outbound map[string]interface{}, port int, dnsServers string) (string, error) {
+	return m.buildRuntimeConfigWithRoute(
+		key,
+		[]interface{}{outbound},
+		[]interface{}{
+			map[string]interface{}{
+				"type":        "field",
+				"inboundTag":  []string{"socks-in"},
+				"outboundTag": "proxy-out",
+			},
+		},
+		port,
+		dnsServers,
+	)
+}
+
+func (m *XrayManager) buildRuntimeConfigWithRoute(key string, outbounds []interface{}, rules []interface{}, port int, dnsServers string) (string, error) {
 	baseDir := m.resolveWorkdir(key)
 	if err := os.MkdirAll(baseDir, 0o755); err != nil {
 		return "", err
@@ -33,8 +49,7 @@ func (m *XrayManager) buildRuntimeConfig(key string, outbound map[string]interfa
 				},
 			},
 		},
-		"outbounds": []interface{}{
-			outbound,
+		"outbounds": append(outbounds,
 			map[string]interface{}{
 				"protocol": "direct",
 				"tag":      "direct",
@@ -43,15 +58,9 @@ func (m *XrayManager) buildRuntimeConfig(key string, outbound map[string]interfa
 				"protocol": "blackhole",
 				"tag":      "block",
 			},
-		},
+		),
 		"routing": map[string]interface{}{
-			"rules": []interface{}{
-				map[string]interface{}{
-					"type":        "field",
-					"inboundTag":  []string{"socks-in"},
-					"outboundTag": "proxy-out",
-				},
-			},
+			"rules": rules,
 		},
 	}
 	if dnsCfg := parseDnsConfig(dnsServers); dnsCfg != nil {

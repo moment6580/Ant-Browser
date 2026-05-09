@@ -7,6 +7,7 @@ import {
   DOC_SKILL_USAGE,
   DOC_TUTORIAL,
 } from './contentIntro'
+import { DOC_CHANGELOG } from './contentChangelog'
 import {
   DOC_API_PROFILES_LAUNCH,
   DOC_API_RUNTIME,
@@ -57,6 +58,18 @@ export const DOC_GROUPS: LaunchDocGroup[] = [
         label: '操作流程',
         summary: '按步骤串起内核、代理、实例和接口调用。',
         content: '',
+      },
+    ],
+  },
+  {
+    id: 'changelog',
+    label: '更新日志',
+    items: [
+      {
+        id: 'changelog-versions',
+        label: '版本更新',
+        summary: '按大版本查看主要变化。',
+        content: DOC_CHANGELOG,
       },
     ],
   },

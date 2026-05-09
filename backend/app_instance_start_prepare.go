@@ -16,6 +16,7 @@ type browserStartInput struct {
 	StartURLs            []string
 	SkipDefaultStartURLs bool
 	PreferVisibleWindow  bool
+	ForceDirectProxy     bool
 }
 
 type browserStartPlan struct {
@@ -33,7 +34,7 @@ type browserStartPlan struct {
 	totalReadyTimeout     time.Duration
 }
 
-func newBrowserStartInput(profileID string, extraLaunchArgs []string, startURLs []string, skipDefaultStartURLs bool, preferVisibleWindow bool) browserStartInput {
+func newBrowserStartInput(profileID string, extraLaunchArgs []string, startURLs []string, skipDefaultStartURLs bool, preferVisibleWindow bool, forceDirectProxy bool) browserStartInput {
 	normalizedExtraLaunchArgs := normalizeNonEmptyStrings(extraLaunchArgs)
 	if preferVisibleWindow {
 		normalizedExtraLaunchArgs = ensureNewWindowLaunchArg(normalizedExtraLaunchArgs)
@@ -45,6 +46,7 @@ func newBrowserStartInput(profileID string, extraLaunchArgs []string, startURLs 
 		StartURLs:            normalizeNonEmptyStrings(startURLs),
 		SkipDefaultStartURLs: skipDefaultStartURLs,
 		PreferVisibleWindow:  preferVisibleWindow,
+		ForceDirectProxy:     forceDirectProxy,
 	}
 }
 
@@ -108,7 +110,7 @@ func (a *App) prepareBrowserStartPlan(input browserStartInput, profile *BrowserP
 		return nil, err
 	}
 
-	effectiveProxy, acquiredXrayBridgeKey, releaseXrayBridge, err := a.resolveBrowserStartProxy(input.ProfileID, profile)
+	effectiveProxy, acquiredXrayBridgeKey, releaseXrayBridge, err := a.resolveBrowserStartProxy(input, profile)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +135,7 @@ func (a *App) prepareBrowserStartPlan(input browserStartInput, profile *BrowserP
 		profile:               profile,
 		chromeBinaryPath:      chromeBinaryPath,
 		userDataDir:           userDataDir,
-		args:                  buildBrowserLaunchArgs(profile, userDataDir, assignedDebugPort, effectiveProxy, sanitizedProfileLaunchArgs, sanitizedExtraLaunchArgs, input.StartURLs, browserDefaultStartURLs(a.config), input.SkipDefaultStartURLs, browserRestoreLastSession(a.config)),
+		args:                  buildBrowserLaunchArgs(profile, userDataDir, assignedDebugPort, effectiveProxy, sanitizedProfileLaunchArgs, sanitizedExtraLaunchArgs, input.StartURLs, a.browserDefaultStartURLs(), input.SkipDefaultStartURLs, browserRestoreLastSession(a.config)),
 		effectiveProxy:        effectiveProxy,
 		acquiredXrayBridgeKey: acquiredXrayBridgeKey,
 		releaseXrayBridge:     releaseXrayBridge,

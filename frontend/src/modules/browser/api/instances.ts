@@ -24,6 +24,14 @@ export async function startBrowserInstance(profileId: string): Promise<BrowserPr
   return nextProfiles.find((item) => item.profileId === profileId) || null
 }
 
+export async function startBrowserInstanceDirect(profileId: string): Promise<BrowserProfile | null> {
+  const bindings: any = await getBindings()
+  if (bindings?.BrowserInstanceStartDirect) {
+    return (await bindings.BrowserInstanceStartDirect(profileId)) || null
+  }
+  return startBrowserInstance(profileId)
+}
+
 export async function startBrowserInstanceByCode(code: string): Promise<BrowserProfile | null> {
   const bindings: any = await getBindings()
   if (bindings?.BrowserInstanceStartByCode) {

@@ -135,6 +135,13 @@ var migrations = []migration{
 			`ALTER TABLE browser_profiles ADD COLUMN proxy_bind_updated_at TEXT NOT NULL DEFAULT ''`,
 		},
 	},
+	{
+		version: 7,
+		desc:    "书签表添加启动时打开字段",
+		stmts: []string{
+			`ALTER TABLE browser_bookmarks ADD COLUMN open_on_start INTEGER NOT NULL DEFAULT 0`,
+		},
+	},
 	// ── 新版本在此追加，格式：
 	// {
 	//     version: 4,

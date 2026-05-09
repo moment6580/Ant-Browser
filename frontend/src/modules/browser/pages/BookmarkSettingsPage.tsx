@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
-import { Plus, Trash2, RotateCcw, GripVertical } from 'lucide-react'
+import { Plus, Trash2, RotateCcw, GripVertical, RefreshCw } from 'lucide-react'
 import { Button, Card, ConfirmModal, Input, toast } from '../../../shared/components'
 import type { BrowserBookmark } from '../types'
-import { fetchBookmarks, resetBookmarks, saveBookmarks } from '../api'
+import { fetchBookmarks, resetBookmarks, saveBookmarks, syncBookmarksToProfiles } from '../api'
 
 export function BookmarkSettingsPage() {
   const [items, setItems] = useState<BrowserBookmark[]>([])
   const [saving, setSaving] = useState(false)
+  const [syncing, setSyncing] = useState(false)
   const [resetOpen, setResetOpen] = useState(false)
+  const [syncOpen, setSyncOpen] = useState(false)
   const [dragIndex, setDragIndex] = useState<number | null>(null)
 
   useEffect(() => {
@@ -19,11 +21,15 @@ export function BookmarkSettingsPage() {
   }
 
   const handleAdd = () => {
-    setItems(prev => [...prev, { name: '', url: '' }])
+    setItems(prev => [...prev, { name: '', url: '', openOnStart: false }])
   }
 
   const handleDelete = (index: number) => {
     setItems(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const handleOpenOnStartChange = (index: number, checked: boolean) => {
+    setItems(prev => prev.map((item, i) => i === index ? { ...item, openOnStart: checked } : item))
   }
 
   const handleSave = async () => {
@@ -35,7 +41,17 @@ export function BookmarkSettingsPage() {
     setSaving(true)
     try {
       await saveBookmarks(items)
-      toast.success('书签已保存，下次新建实例时生效')
+      const result = await syncBookmarksToProfiles()
+      const parts = ['书签已保存']
+      if (result.synced > 0) parts.push(`已同步 ${result.synced} 个已有实例`)
+      if (result.skipped > 0) parts.push(`跳过运行中 ${result.skipped} 个，停止后再同步`)
+      if (result.failed > 0) parts.push(`失败 ${result.failed} 个`)
+      const message = parts.join('，')
+      if (result.failed > 0 || result.skipped > 0) {
+        toast.warning(message)
+      } else {
+        toast.success(message)
+      }
     } finally {
       setSaving(false)
     }
@@ -46,6 +62,27 @@ export function BookmarkSettingsPage() {
     const fresh = await fetchBookmarks()
     setItems(fresh)
     toast.success('已恢复默认书签')
+  }
+
+  const handleSync = async () => {
+    setSyncing(true)
+    try {
+      const result = await syncBookmarksToProfiles()
+      const parts = [`已同步 ${result.synced} 个实例`]
+      if (result.skipped > 0) parts.push(`跳过运行中 ${result.skipped} 个，停止后再同步`)
+      if (result.failed > 0) parts.push(`失败 ${result.failed} 个`)
+      const message = parts.join('，')
+      if (result.failed > 0 || result.skipped > 0) {
+        toast.warning(message)
+      } else {
+        toast.success(message)
+      }
+      setSyncOpen(false)
+    } catch (error: any) {
+      toast.error(error?.message || '同步失败')
+    } finally {
+      setSyncing(false)
+    }
   }
 
   // 拖拽排序
@@ -71,6 +108,10 @@ export function BookmarkSettingsPage() {
           <p className="text-sm text-[var(--color-text-muted)] mt-1">新建实例首次启动时自动写入书签栏，已有书签不受影响</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="secondary" size="sm" onClick={() => setSyncOpen(true)} loading={syncing}>
+            <RefreshCw className="w-4 h-4 mr-1.5" />
+            手动同步
+          </Button>
           <Button variant="secondary" size="sm" onClick={() => setResetOpen(true)}>
             <RotateCcw className="w-4 h-4 mr-1.5" />
             恢复默认
@@ -107,6 +148,15 @@ export function BookmarkSettingsPage() {
                 placeholder="https://..."
                 className="flex-1"
               />
+              <label className="flex items-center gap-1.5 px-2 text-xs text-[var(--color-text-secondary)] whitespace-nowrap select-none">
+                <input
+                  type="checkbox"
+                  checked={Boolean(item.openOnStart)}
+                  onChange={e => handleOpenOnStartChange(index, e.target.checked)}
+                  className="h-4 w-4 rounded border-[var(--color-border-default)] accent-[var(--color-accent)]"
+                />
+                启动打开
+              </label>
               <button
                 type="button"
                 onClick={() => handleDelete(index)}
@@ -142,6 +192,15 @@ export function BookmarkSettingsPage() {
         content="将清除当前所有自定义书签，恢复为内置默认列表。确定继续？"
         confirmText="确定恢复"
         danger
+      />
+
+      <ConfirmModal
+        open={syncOpen}
+        onClose={() => setSyncOpen(false)}
+        onConfirm={handleSync}
+        title="手动同步已有实例"
+        content="只会增量追加缺失的默认书签，不会删除、改名或移动用户已有书签。运行中的实例会跳过。"
+        confirmText="开始同步"
       />
     </div>
   )

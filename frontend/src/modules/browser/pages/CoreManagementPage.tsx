@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+﻿import { useEffect, useState, useCallback } from 'react'
 import { FolderOpen, Settings, Edit2 } from 'lucide-react'
 import { Badge, Button, Card, ConfirmModal, FormItem, Input, Modal, Switch, Table, Textarea, toast } from '../../../shared/components'
 import type { TableColumn } from '../../../shared/components/Table'
@@ -517,7 +517,7 @@ export function CoreManagementPage() {
               value={settingsForm.defaultStartUrls}
               onChange={e => setSettingsForm(prev => ({ ...prev, defaultStartUrls: e.target.value }))}
               rows={4}
-              placeholder="https://ippure.com/"
+              placeholder="启动 URL"
             />
           </FormItem>
           <FormItem label="恢复上次关闭的标签页" hint="关闭后只打开默认启动页或空白页">

@@ -258,6 +258,30 @@ func backupSrcTableExists(tx *sql.Tx, table string) (bool, error) {
 	return cnt > 0, nil
 }
 
+func backupSrcColumnExists(tx *sql.Tx, table string, column string) (bool, error) {
+	rows, err := tx.Query("PRAGMA src.table_info(" + table + ")")
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var columnType string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &pk); err != nil {
+			return false, err
+		}
+		if strings.EqualFold(name, column) {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
+}
+
 func backupCountRows(tx *sql.Tx, tableName string) (int, error) {
 	var cnt int
 	row := tx.QueryRow("SELECT COUNT(1) FROM " + tableName)

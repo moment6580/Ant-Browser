@@ -20,6 +20,7 @@ type XrayManager struct {
 	Bridges      map[string]*XrayBridge
 	OnBridgeDied func(key string, err error) // 桥接进程意外退出回调
 	mu           sync.Mutex
+	launchMu     sync.Mutex
 	stopCh       chan struct{}
 	stopOnce     sync.Once
 }
@@ -40,8 +41,8 @@ func NewXrayManager(cfg *config.Config, appRoot string) *XrayManager {
 // 返回: supported bool, errorMsg string
 func ValidateProxyConfig(proxyConfig string, proxies []config.BrowserProxy, proxyId string) (bool, string) {
 	src := strings.TrimSpace(proxyConfig)
-	found := false
 	if proxyId != "" {
+		found := false
 		for _, item := range proxies {
 			if strings.EqualFold(item.ProxyId, proxyId) {
 				src = strings.TrimSpace(item.ProxyConfig)
@@ -65,6 +66,12 @@ func ValidateProxyConfig(proxyConfig string, proxies []config.BrowserProxy, prox
 	if strings.HasPrefix(l, "http://") || strings.HasPrefix(l, "https://") || strings.HasPrefix(l, "socks5://") {
 		return true, ""
 	}
+	if IsChainSocks5Proxy(src) {
+		if _, err := ParseChainSocks5Config(src); err != nil {
+			return false, fmt.Sprintf("链式代理配置解析失败: %v", err)
+		}
+		return true, ""
+	}
 	if IsSingBoxProtocol(src) {
 		if _, err := BuildSingBoxOutbound(src); err != nil {
 			return false, fmt.Sprintf("代理配置解析失败: %v", err)
@@ -86,21 +93,16 @@ func ValidateProxyConfig(proxyConfig string, proxies []config.BrowserProxy, prox
 // 注意: Xray 仅支持 vless/vmess/trojan/shadowsocks 等协议
 // hysteria2 不支持，需要使用 Hysteria 客户端或 sing-box
 func RequiresBridge(proxyConfig string, proxies []config.BrowserProxy, proxyId string) bool {
-	src := strings.TrimSpace(proxyConfig)
-	if proxyId != "" {
-		for _, item := range proxies {
-			if strings.EqualFold(item.ProxyId, proxyId) {
-				src = strings.TrimSpace(item.ProxyConfig)
-				break
-			}
-		}
-	}
+	src := resolveProxyConfig(proxyConfig, proxies, proxyId)
 	if src == "" {
 		return false
 	}
 	l := strings.ToLower(src)
 	if strings.HasPrefix(l, "http://") || strings.HasPrefix(l, "https://") || strings.HasPrefix(l, "socks5://") {
 		return false
+	}
+	if IsChainSocks5Proxy(src) {
+		return true
 	}
 	if strings.HasPrefix(l, "hysteria://") || strings.HasPrefix(l, "hysteria2://") {
 		return false

@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -16,9 +17,14 @@ func proxyEndpoint(src string) (string, error) {
 	l := strings.ToLower(src)
 
 	if strings.HasPrefix(l, "socks5://") || strings.HasPrefix(l, "http://") || strings.HasPrefix(l, "https://") {
-		hostport := src[strings.Index(src, "//")+2:]
-		hostport = strings.SplitN(hostport, "/", 2)[0]
-		return hostport, nil
+		parsed, err := url.Parse(src)
+		if err != nil {
+			return "", err
+		}
+		if parsed.Host == "" {
+			return "", fmt.Errorf("缺少代理地址")
+		}
+		return parsed.Host, nil
 	}
 
 	if strings.HasPrefix(l, "vmess://") {

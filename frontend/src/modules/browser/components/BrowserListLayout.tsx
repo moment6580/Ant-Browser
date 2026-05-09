@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+﻿import { Link } from 'react-router-dom'
 import { Activity, CheckCircle, ChevronRight, ChevronUp, Edit2, FileText, Gift, LayoutGrid, List, Play, Plus, RefreshCw, Sliders, Square, Star, Trash2, XCircle } from 'lucide-react'
 
 import { Button, Card, FormItem, Input, Modal, StatCard, Switch, Table, Textarea } from '../../../shared/components'
@@ -250,7 +250,7 @@ export function BrowserListSettingsModal({
             value={startUrlsText}
             onChange={(event) => onStartUrlsTextChange(event.target.value)}
             rows={4}
-            placeholder="https://ippure.com/"
+            placeholder="启动 URL"
           />
         </FormItem>
         <FormItem label="恢复上次关闭的标签页" hint="关闭后只打开默认启动页或空白页">

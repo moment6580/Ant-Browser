@@ -58,8 +58,8 @@ browser: {}
 	if len(cfg.Browser.DefaultFingerprintArgs) == 0 || len(cfg.Browser.DefaultLaunchArgs) == 0 {
 		t.Fatalf("Browser 默认启动参数未补齐")
 	}
-	if len(cfg.Browser.DefaultStartURLs) != 3 {
-		t.Fatalf("Browser 默认启动页面未补齐: got=%v", cfg.Browser.DefaultStartURLs)
+	if cfg.Browser.DefaultStartURLs == nil || len(cfg.Browser.DefaultStartURLs) != 0 {
+		t.Fatalf("Browser 默认启动页面应初始化为空切片: got=%v", cfg.Browser.DefaultStartURLs)
 	}
 	if cfg.Browser.RestoreLastSession {
 		t.Fatalf("Browser.RestoreLastSession 默认应为 false")
@@ -138,6 +138,31 @@ func TestDefaultConfigUsesCurrentOSFingerprintPlatform(t *testing.T) {
 		if cfg.Browser.DefaultFingerprintArgs[i] != want[i] {
 			t.Fatalf("默认指纹参数不符: got=%v want=%v", cfg.Browser.DefaultFingerprintArgs, want)
 		}
+	}
+}
+
+func TestLoadClearsLegacyVerificationStartURLs(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.yaml")
+	legacyConfig := `
+browser:
+  default_start_urls:
+    - https://ippure.com/
+    - https://iplark.com/
+    - https://ping0.cc/
+`
+	if err := os.WriteFile(configPath, []byte(legacyConfig), 0o644); err != nil {
+		t.Fatalf("写入测试配置失败: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("加载配置失败: %v", err)
+	}
+	if cfg.Browser.DefaultStartURLs == nil || len(cfg.Browser.DefaultStartURLs) != 0 {
+		t.Fatalf("旧默认检测页应迁移为空: got=%v", cfg.Browser.DefaultStartURLs)
 	}
 }
 

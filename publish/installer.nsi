@@ -122,6 +122,14 @@ FunctionEnd
 Function WarnInstallDir
   StrCpy $0 "$INSTDIR"
 
+  StrCpy $1 "$0" 2
+  ${If} "$1" == "C:"
+    Goto warn_dir
+  ${EndIf}
+  ${If} "$1" == "c:"
+    Goto warn_dir
+  ${EndIf}
+
   StrLen $1 "$PROGRAMFILES64"
   ${If} $1 > 0
     StrCpy $2 "$0" $1
@@ -149,7 +157,7 @@ Function WarnInstallDir
   Return
 
 warn_dir:
-  MessageBox MB_ICONEXCLAMATION|MB_OKCANCEL|MB_DEFBUTTON2 "当前安装目录位于 Program Files。$\r$\n$\r$\n在部分机器上，普通权限运行可能无法写入 data 目录，导致再次启动闪退或浏览器实例启动失败。$\r$\n$\r$\n建议改为可写目录（如 D:\AntBrowser）。$\r$\n$\r$\n点击“确定”继续安装到当前目录，点击“取消”返回修改安装路径。" IDOK continue_install IDCANCEL cancel_install
+  MessageBox MB_ICONEXCLAMATION|MB_OKCANCEL|MB_DEFBUTTON2 "不建议安装到 C 盘、Program Files 或其他受权限保护的目录。$\r$\n$\r$\nAnt Browser 会在安装目录写入 data、浏览器实例和运行时文件；普通权限运行时可能写入失败，导致再次启动闪退或浏览器实例启动失败。$\r$\n$\r$\n建议改为非 C 盘可写目录，例如 D:\software\Ant Browser 或 E:\software\Ant Browser。$\r$\n$\r$\n点击“确定”继续安装到当前目录，点击“取消”返回修改安装路径。" IDOK continue_install IDCANCEL cancel_install
 
 continue_install:
   Return
@@ -173,9 +181,13 @@ RequestExecutionLevel admin
 !define MUI_UNICON "..\build\windows\icon.ico"
 
 !insertmacro MUI_PAGE_WELCOME
+!define MUI_DIRECTORYPAGE_TEXT_TOP "请选择 Ant Browser 的安装目录。建议安装到非 C 盘的可写目录，例如 D:\software\Ant Browser 或 E:\software\Ant Browser；不要安装到 C 盘、Program Files 或其他受权限保护的目录。"
+!define MUI_DIRECTORYPAGE_TEXT_DESTINATION "安装目录（建议非 C 盘）"
 !define MUI_PAGE_CUSTOMFUNCTION_LEAVE WarnInstallDir
 !insertmacro MUI_PAGE_DIRECTORY
 !undef MUI_PAGE_CUSTOMFUNCTION_LEAVE
+!undef MUI_DIRECTORYPAGE_TEXT_TOP
+!undef MUI_DIRECTORYPAGE_TEXT_DESTINATION
 !define MUI_COMPONENTSPAGE_SMALLDESC
 !insertmacro MUI_PAGE_COMPONENTS
 !insertmacro MUI_PAGE_INSTFILES

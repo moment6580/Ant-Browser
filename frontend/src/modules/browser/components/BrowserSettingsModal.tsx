@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { CheckCircle, Edit2, Plus, Star, Trash2, XCircle } from 'lucide-react'
 import { Button, Card, FormItem, Input, Modal, Switch, Table, Textarea, toast } from '../../../shared/components'
 import type { TableColumn } from '../../../shared/components/Table'
@@ -132,7 +132,7 @@ export function BrowserSettingsModal({ open, onClose, settings: initSettings, co
             <Textarea value={launchText} onChange={e => setLaunchText(e.target.value)} rows={3} placeholder="--disable-sync" />
           </FormItem>
           <FormItem label="默认启动页面（每行一个 URL）">
-            <Textarea value={startUrlsText} onChange={e => setStartUrlsText(e.target.value)} rows={4} placeholder="https://ippure.com/" />
+            <Textarea value={startUrlsText} onChange={e => setStartUrlsText(e.target.value)} rows={4} placeholder="启动 URL" />
           </FormItem>
           <FormItem label="恢复上次关闭的标签页" hint="关闭后只打开上面配置的默认页面或空白页">
             <div className="flex items-center justify-between rounded-lg border border-[var(--color-border-default)] px-3 py-2">

@@ -1,4 +1,4 @@
-import type { BrowserCore, BrowserProfile, BrowserProxy, BrowserSettings } from '../types'
+﻿import type { BrowserCore, BrowserProfile, BrowserProxy, BrowserSettings } from '../types'
 
 export async function getBindings() {
   try {
@@ -21,11 +21,7 @@ export function createDefaultBrowserSettings(): BrowserSettings {
     userDataRoot: 'data',
     defaultFingerprintArgs: [],
     defaultLaunchArgs: [],
-    defaultStartUrls: [
-      'https://ippure.com/',
-      'https://iplark.com/',
-      'https://ping0.cc/',
-    ],
+    defaultStartUrls: [],
     restoreLastSession: false,
     startReadyTimeoutMs: 3000,
     startStableWindowMs: 1200,

@@ -20,7 +20,7 @@ export function LaunchDocsFlowPage({ baseUrl }: LaunchDocsFlowPageProps) {
       summary: '先准备浏览器内核，并在应用里确认已识别。',
       path: '指纹浏览器 -> 内核管理 -> 下载内核 -> 设为默认',
       example: `chrome/
-  chrome142/
+  chrome-<version>/
     chrome.exe`,
     },
     {

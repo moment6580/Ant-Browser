@@ -57,6 +57,23 @@ export interface BrowserSettings {
   startStableWindowMs: number
 }
 
+export interface ProxyCheckTarget {
+  id: string
+  name: string
+  type: string
+  url: string
+  parser?: string
+  timeoutMs?: number
+  expectedStatus?: number[]
+}
+
+export interface ProxyCheckSettings {
+  bridgeStartTimeoutMs: number
+  speedTargetId: string
+  ipHealthTargetId: string
+  targets: ProxyCheckTarget[]
+}
+
 export interface BrowserCore {
   coreId: string
   coreName: string
@@ -139,6 +156,16 @@ export interface SnapshotInfo {
 export interface BrowserBookmark {
   name: string
   url: string
+  openOnStart?: boolean
+}
+
+export interface BookmarkSyncResult {
+  total: number
+  synced: number
+  skipped: number
+  failed: number
+  skippedList: string[]
+  failedList: string[]
 }
 
 

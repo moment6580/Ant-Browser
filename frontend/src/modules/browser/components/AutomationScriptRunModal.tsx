@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Copy, Play } from "lucide-react";
+import { Copy, FileText, FolderOpen, Play } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import {
   Badge,
   Button,
@@ -13,6 +14,7 @@ import {
 import {
   copyBrowserProfile,
   fetchBrowserProfiles,
+  openCorePath,
 } from "../api";
 import { runAutomationScript } from "../automationScriptApi";
 import {
@@ -37,6 +39,12 @@ type SelectableProfile = BrowserProfile & {
 interface DemoCreateDraft {
   profileName: string;
   templateProfileId: string;
+}
+
+interface ResultOutputEntry {
+  key: string;
+  label: string;
+  path: string;
 }
 
 interface AutomationScriptRunModalProps {
@@ -95,6 +103,105 @@ function formatDuration(durationMs?: number): string {
   return `${(durationMs / 1000).toFixed(2)} s`;
 }
 
+function parseRunResultOutputs(resultText?: string): ResultOutputEntry[] {
+  const normalized = String(resultText || "").trim();
+  if (!normalized) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(normalized);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return [];
+    }
+
+    const seen = new Set<string>();
+    const outputs: ResultOutputEntry[] = [];
+
+    const addOutput = (key: string, value: string) => {
+      const path = value.trim();
+      if (!path || seen.has(path)) {
+        return;
+      }
+      seen.add(path);
+      outputs.push({
+        key,
+        label: formatRunResultOutputLabel(key),
+        path,
+      });
+    };
+
+    const collectOutputs = (value: unknown, keyHint = "") => {
+      if (!value) {
+        return;
+      }
+      if (typeof value === "string") {
+        if (/path$/i.test(keyHint)) {
+          addOutput(keyHint, value);
+        }
+        return;
+      }
+      if (Array.isArray(value)) {
+        if (keyHint === "artifacts") {
+          value.forEach((item) => {
+            if (typeof item === "string") {
+              addOutput(keyHint, item);
+            }
+          });
+          return;
+        }
+        value.forEach((item) => collectOutputs(item, keyHint));
+        return;
+      }
+      if (typeof value !== "object") {
+        return;
+      }
+
+      for (const [nestedKey, nestedValue] of Object.entries(
+        value as Record<string, unknown>,
+      )) {
+        collectOutputs(nestedValue, nestedKey);
+      }
+    };
+
+    collectOutputs(parsed);
+    return outputs;
+  } catch {
+    return [];
+  }
+}
+
+function formatRunResultOutputLabel(key: string): string {
+  switch (key) {
+    case "outputPath":
+      return "输出文件";
+    case "screenshotPath":
+      return "截图文件";
+    case "artifacts":
+      return "导出文件";
+    default:
+      return key;
+  }
+}
+
+function formatRunResultOutputName(path: string): string {
+  const segments = path.split(/[\\/]/).filter(Boolean);
+  return segments[segments.length - 1] || path;
+}
+
+function formatRunResultText(resultText?: string): string {
+  const normalized = String(resultText || "").trim();
+  if (!normalized) {
+    return "";
+  }
+
+  try {
+    return JSON.stringify(JSON.parse(normalized), null, 2);
+  } catch {
+    return resultText || "";
+  }
+}
+
 async function copyToClipboard(text: string, successMessage: string) {
   try {
     await navigator.clipboard.writeText(text);
@@ -134,7 +241,7 @@ function isPlaceholderSelectorText(text: string): boolean {
             .trim()
             .toUpperCase()
         : "";
-    return !code || code === "BUYER_001";
+    return !code || code === "BUYER_001" || code === "DEMO_ABC123";
   } catch {
     return false;
   }
@@ -251,8 +358,18 @@ function resolvePreferredProfileId(
 function buildSelectableProfileOptions(profiles: SelectableProfile[]) {
   return profiles.map((profile) => ({
     value: profile.profileId,
-    label: `${profile.launchCode} · ${profile.profileName} · ${profile.running ? "运行中" : "已停止"}`,
+    label: `${profile.launchCode} · ${profile.profileName} · ${formatSelectableProfileStatus(profile)}`,
   }));
+}
+
+function formatSelectableProfileStatus(profile: SelectableProfile): string {
+  if (profile.running && profile.debugReady && profile.debugPort > 0) {
+    return "可连接";
+  }
+  if (profile.running) {
+    return "启动中";
+  }
+  return "未启动，执行时自动启动";
 }
 
 function sortTemplateProfiles(profiles: BrowserProfile[]) {
@@ -276,6 +393,7 @@ export function AutomationScriptRunModal({
   dirty = false,
   onClose,
 }: AutomationScriptRunModalProps) {
+  const navigate = useNavigate();
   const [selectorText, setSelectorText] = useState("");
   const [paramsText, setParamsText] = useState("");
   const [running, setRunning] = useState(false);
@@ -356,22 +474,35 @@ export function AutomationScriptRunModal({
     try {
       const allProfiles = await fetchBrowserProfiles();
       const profiles = filterSelectableProfiles(allProfiles);
-      setAvailableProfiles(profiles);
-      setTemplateProfiles(sortTemplateProfiles(allProfiles));
-      setSelectedProfileId((current) => {
-        const preferredProfile = resolvePreferredProfileId(
+      const nextSelectedProfileId =
+        resolvePreferredProfileId(
           profiles,
           preferredProfileId,
           preferredLaunchCode,
+        ) ||
+        (selectedProfileId &&
+        profiles.some((profile) => profile.profileId === selectedProfileId)
+          ? selectedProfileId
+          : profiles[0]?.profileId || "");
+      const nextSelectedProfile =
+        profiles.find((profile) => profile.profileId === nextSelectedProfileId) ||
+        null;
+
+      setAvailableProfiles(profiles);
+      setTemplateProfiles(sortTemplateProfiles(allProfiles));
+      setSelectedProfileId(nextSelectedProfileId);
+      if (demoMode === "select" && nextSelectedProfile) {
+        const nextSelectorText = buildDemoSelectorText(
+          nextSelectedProfile.launchCode,
         );
-        if (preferredProfile) {
-          return preferredProfile;
+        if (
+          resolveSelectorLaunchCode(selectorText) !==
+          nextSelectedProfile.launchCode
+        ) {
+          setSelectorText(nextSelectorText);
         }
-        if (current && profiles.some((profile) => profile.profileId === current)) {
-          return current;
-        }
-        return "";
-      });
+        syncDemoSessionFromProfile(nextSelectedProfile, "选择已有实例");
+      }
       setCreateDraft((current) => {
         if (
           current.templateProfileId &&
@@ -436,7 +567,7 @@ export function AutomationScriptRunModal({
       resolveSelectorLaunchCode(nextSelectorText) || nextDemoSession.launchCode,
       false,
     );
-  }, [open, reloadDemoSession, script, usesStoredTargetConfig]);
+  }, [open, script, usesStoredTargetConfig]);
 
   useEffect(() => {
     if (!open || !script || script.type !== "playwright-cdp") {
@@ -585,6 +716,14 @@ export function AutomationScriptRunModal({
           selectorText,
           demoSession,
         );
+    if (
+      script.type === "playwright-cdp" &&
+      !usesStoredTargetConfig &&
+      demoMode === "select" &&
+      selectedProfile
+    ) {
+      nextSelectorText = buildDemoSelectorText(selectedProfile.launchCode);
+    }
     const selectorError = usesStoredTargetConfig
       ? ""
       : validateJsonObjectText(
@@ -628,6 +767,14 @@ export function AutomationScriptRunModal({
     if (nextSelectorText !== selectorText) {
       setSelectorText(nextSelectorText);
     }
+    if (
+      script.type === "playwright-cdp" &&
+      !usesStoredTargetConfig &&
+      demoMode === "select" &&
+      selectedProfile
+    ) {
+      syncDemoSessionFromProfile(selectedProfile, "选择已有实例");
+    }
 
     await executeRun(nextSelectorText, paramsText);
   };
@@ -649,6 +796,23 @@ export function AutomationScriptRunModal({
     await handleRun();
   };
 
+  const handleOpenScriptDetail = () => {
+    if (!script || running || demoBusy) {
+      return;
+    }
+    onClose();
+    navigate(`/browser/automation/${script.id}`);
+  };
+
+  const handleOpenOutputPath = async (path: string) => {
+    try {
+      await openCorePath(path);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "打开目录失败";
+      toast.error(message);
+    }
+  };
+
   if (!script) {
     return null;
   }
@@ -658,6 +822,8 @@ export function AutomationScriptRunModal({
     script.type === "playwright-cdp" && !usesStoredTargetConfig;
   const selectableProfileOptions = buildSelectableProfileOptions(availableProfiles);
   const templateProfileOptions = buildTemplateProfileOptions(templateProfiles);
+  const resultOutputs = parseRunResultOutputs(lastRun?.resultText);
+  const formattedResultText = formatRunResultText(lastRun?.resultText);
 
   return (
     <Modal
@@ -687,36 +853,49 @@ export function AutomationScriptRunModal({
     >
       <div className="space-y-5">
         <div className="rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-secondary)] px-4 py-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge
-              variant={script.type === "launch-api" ? "info" : "default"}
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge
+                  variant={script.type === "launch-api" ? "info" : "default"}
+                  size="sm"
+                >
+                  {getAutomationScriptTypeLabel(script.type)}
+                </Badge>
+                <Badge
+                  variant={
+                    script.status === "ready"
+                      ? "success"
+                      : script.status === "disabled"
+                        ? "default"
+                        : "warning"
+                  }
+                  size="sm"
+                  dot
+                >
+                  {script.status === "ready"
+                    ? "可用"
+                    : script.status === "disabled"
+                      ? "停用"
+                      : "草稿"}
+                </Badge>
+              </div>
+              <div className="mt-3 text-sm text-[var(--color-text-primary)]">
+                {script.name}
+              </div>
+              <div className="mt-1 text-xs text-[var(--color-text-muted)]">
+                最近更新 {formatDateTime(script.updatedAt)}
+              </div>
+            </div>
+            <Button
+              variant="secondary"
               size="sm"
+              onClick={handleOpenScriptDetail}
+              disabled={running || demoBusy}
             >
-              {getAutomationScriptTypeLabel(script.type)}
-            </Badge>
-            <Badge
-              variant={
-                script.status === "ready"
-                  ? "success"
-                  : script.status === "disabled"
-                    ? "default"
-                    : "warning"
-              }
-              size="sm"
-              dot
-            >
-              {script.status === "ready"
-                ? "可用"
-                : script.status === "disabled"
-                  ? "停用"
-                  : "草稿"}
-            </Badge>
-          </div>
-          <div className="mt-3 text-sm text-[var(--color-text-primary)]">
-            {script.name}
-          </div>
-          <div className="mt-1 text-xs text-[var(--color-text-muted)]">
-            最近更新 {formatDateTime(script.updatedAt)}
+              <FileText className="h-4 w-4" />
+              查看脚本详情
+            </Button>
           </div>
         </div>
 
@@ -794,7 +973,6 @@ export function AutomationScriptRunModal({
                   disabled={
                     running ||
                     demoBusy ||
-                    profilesLoading ||
                     selectableProfileOptions.length === 0
                   }
                 />
@@ -914,7 +1092,7 @@ export function AutomationScriptRunModal({
                     size="sm"
                     variant="secondary"
                     onClick={() =>
-                      void copyToClipboard(lastRun.resultText, "执行结果已复制")
+                      void copyToClipboard(formattedResultText, "执行结果已复制")
                     }
                   >
                     <Copy className="h-3.5 w-3.5" />
@@ -923,10 +1101,39 @@ export function AutomationScriptRunModal({
                 </div>
                 <Textarea
                   rows={10}
-                  value={lastRun.resultText}
+                  value={formattedResultText}
                   readOnly
                   className="font-mono"
                 />
+                {resultOutputs.length > 0 && (
+                  <div className="rounded-lg border border-[var(--color-border-muted)] bg-[var(--color-bg-secondary)] px-3 py-3">
+                    <div className="space-y-2">
+                      {resultOutputs.map((output) => (
+                        <div
+                          key={`${output.key}-${output.path}`}
+                          className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--color-border-muted)] bg-[var(--color-bg-surface)] px-3 py-2"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm text-[var(--color-text-primary)]">
+                              {output.label} · {formatRunResultOutputName(output.path)}
+                            </div>
+                            <div className="mt-1 break-all text-xs text-[var(--color-text-muted)]">
+                              {output.path}
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => void handleOpenOutputPath(output.path)}
+                          >
+                            <FolderOpen className="h-3.5 w-3.5" />
+                            打开文件夹
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

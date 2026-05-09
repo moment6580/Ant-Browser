@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -34,10 +35,16 @@ type dualInstanceRuntimeBrowser struct {
 	LaunchArgs           []string
 }
 
-func (a *App) runLaunchAPIScript(script automation.ScriptRecord, input automation.ScriptRunRequest) (string, string, string) {
+func (a *App) runLaunchAPIScript(ctx context.Context, script automation.ScriptRecord, input automation.ScriptRunRequest) (string, string, string) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return "", "脚本执行失败", automationRunContextErrorMessage(err)
+	}
 	paramsText := resolveAutomationRunJSONText(input.ParamsText, script.ParamsText, input.UseScriptParams)
 	if script.ID == automation.DualInstanceRuntimeScriptID {
-		return a.runDualInstanceRuntimeLaunchAPIScript(paramsText)
+		return a.runDualInstanceRuntimeLaunchAPIScript(ctx, paramsText)
 	}
 
 	selector, targetSummary, err := a.resolveAutomationEffectiveSelector(script, input, true)
@@ -55,8 +62,11 @@ func (a *App) runLaunchAPIScript(script automation.ScriptRecord, input automatio
 		body[key] = value
 	}
 
-	status, payload, reqErr := a.automationDemoRequest(http.MethodPost, automationDemoLaunchPath, body)
+	status, payload, reqErr := a.automationDemoRequestWithContext(ctx, http.MethodPost, automationDemoLaunchPath, body)
 	if reqErr != nil {
+		if err := ctx.Err(); err != nil {
+			return "", "Launch API 请求失败", automationRunContextErrorMessage(err)
+		}
 		return "", "Launch API 请求失败", reqErr.Error()
 	}
 
@@ -80,7 +90,10 @@ func (a *App) runLaunchAPIScript(script automation.ScriptRecord, input automatio
 	return responseText, summary, errorText
 }
 
-func (a *App) runDualInstanceRuntimeLaunchAPIScript(paramsText string) (string, string, string) {
+func (a *App) runDualInstanceRuntimeLaunchAPIScript(ctx context.Context, paramsText string) (string, string, string) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	browsers, timeoutMs, err := parseDualInstanceRuntimeParams(paramsText)
 	if err != nil {
 		return "", "脚本执行失败", err.Error()
@@ -90,7 +103,16 @@ func (a *App) runDualInstanceRuntimeLaunchAPIScript(paramsText string) (string, 
 	browserCodes := make([]string, 0, len(browsers))
 
 	for _, browser := range browsers {
-		sessionStatus, sessionPayload, reqErr := a.automationDemoRequest(
+		if err := ctx.Err(); err != nil {
+			return buildDualInstanceRuntimeFailureResult(
+				sessions,
+				browserCodes,
+				"双实例流程超时",
+				automationRunContextErrorMessage(err),
+			)
+		}
+		sessionStatus, sessionPayload, reqErr := a.automationDemoRequestWithContext(
+			ctx,
 			http.MethodPost,
 			automationDemoRuntimeSessionPath,
 			map[string]any{
@@ -107,6 +129,14 @@ func (a *App) runDualInstanceRuntimeLaunchAPIScript(paramsText string) (string, 
 		sessionPayload = ensureAutomationPayload(sessionPayload, browser.Code)
 		sessions = append(sessions, sessionPayload)
 		if reqErr != nil {
+			if err := ctx.Err(); err != nil {
+				return buildDualInstanceRuntimeFailureResult(
+					sessions,
+					browserCodes,
+					"双实例流程超时",
+					automationRunContextErrorMessage(err),
+				)
+			}
 			return buildDualInstanceRuntimeFailureResult(
 				sessions,
 				browserCodes,

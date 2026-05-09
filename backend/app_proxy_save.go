@@ -62,7 +62,6 @@ func (a *App) SaveBrowserProxies(proxies []BrowserProxy) error {
 
 	builtins := []BrowserProxy{
 		{ProxyId: "__direct__", ProxyName: "直连（不走代理）", ProxyConfig: "direct://"},
-		{ProxyId: "__local__", ProxyName: "本地代理", ProxyConfig: "http://127.0.0.1:7890"},
 	}
 	for _, builtin := range builtins {
 		found := false

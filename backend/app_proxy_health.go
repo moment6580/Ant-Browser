@@ -15,7 +15,7 @@ import (
 // BrowserProxyTestSpeed 手动触发单个代理测速并持久化结果
 func (a *App) BrowserProxyTestSpeed(proxyId string) ProxyTestResult {
 	proxies := a.getLatestProxies()
-	result := proxy.SpeedTest(proxyId, proxies, a.xrayMgr, a.singboxMgr, nil)
+	result := proxy.SpeedTest(proxyId, proxies, a.xrayMgr, a.singboxMgr, a.proxySpeedTestConfig())
 	if a.browserMgr.ProxyDAO != nil {
 		testedAt := time.Now().Format(time.RFC3339)
 		_ = a.browserMgr.ProxyDAO.UpdateSpeedResult(proxyId, result.Ok, result.LatencyMs, testedAt)
@@ -49,7 +49,7 @@ func (a *App) BrowserProxyBatchTestSpeed(proxyIds []string, concurrency int) []P
 		go func() {
 			defer wg.Done()
 			for job := range jobs {
-				result := proxy.SpeedTest(job.ProxyId, proxies, a.xrayMgr, a.singboxMgr, nil)
+				result := proxy.SpeedTest(job.ProxyId, proxies, a.xrayMgr, a.singboxMgr, a.proxySpeedTestConfig())
 				if a.browserMgr.ProxyDAO != nil {
 					testedAt := time.Now().Format(time.RFC3339)
 					_ = a.browserMgr.ProxyDAO.UpdateSpeedResult(job.ProxyId, result.Ok, result.LatencyMs, testedAt)
@@ -73,10 +73,10 @@ func (a *App) BrowserProxyBatchTestSpeed(proxyIds []string, concurrency int) []P
 	return results
 }
 
-// BrowserProxyCheckIPHealth 检测单个代理的出口 IP 健康信息（通过 IPPure 接口）
+// BrowserProxyCheckIPHealth 检测单个代理的出口 IP 健康信息
 func (a *App) BrowserProxyCheckIPHealth(proxyId string) ProxyIPHealthResult {
 	proxies := a.getLatestProxies()
-	data, err := proxy.FetchIPPureInfo(proxyId, proxies, a.xrayMgr, a.singboxMgr)
+	data, err := proxy.FetchIPHealthInfo(proxyId, proxies, a.xrayMgr, a.singboxMgr, a.proxyIPHealthConfig())
 	result := buildProxyIPHealthResult(proxyId, data, err)
 	a.persistProxyIPHealthResult(result)
 	if a.ctx != nil {
@@ -111,7 +111,7 @@ func (a *App) BrowserProxyBatchCheckIPHealth(proxyIds []string, concurrency int)
 		go func() {
 			defer wg.Done()
 			for job := range jobs {
-				data, err := proxy.FetchIPPureInfo(job.ProxyId, proxies, a.xrayMgr, a.singboxMgr)
+				data, err := proxy.FetchIPHealthInfo(job.ProxyId, proxies, a.xrayMgr, a.singboxMgr, a.proxyIPHealthConfig())
 				result := buildProxyIPHealthResult(job.ProxyId, data, err)
 				a.persistProxyIPHealthResult(result)
 				results[job.Idx] = result
@@ -132,25 +132,26 @@ func (a *App) BrowserProxyBatchCheckIPHealth(proxyIds []string, concurrency int)
 }
 
 func buildProxyIPHealthResult(proxyId string, data map[string]interface{}, err error) ProxyIPHealthResult {
+	if data == nil {
+		data = map[string]interface{}{}
+	}
+
 	if err != nil {
+		data["error"] = err.Error()
 		return ProxyIPHealthResult{
 			ProxyId:   proxyId,
 			Ok:        false,
-			Source:    "ippure",
+			Source:    mapStringDefault(data, "_source", "ip_health"),
 			Error:     err.Error(),
-			RawData:   map[string]interface{}{},
+			RawData:   data,
 			UpdatedAt: time.Now().Format(time.RFC3339),
 		}
-	}
-
-	if data == nil {
-		data = map[string]interface{}{}
 	}
 
 	return ProxyIPHealthResult{
 		ProxyId:        proxyId,
 		Ok:             true,
-		Source:         "ippure",
+		Source:         mapStringDefault(data, "_source", "ip_health"),
 		Error:          "",
 		IP:             mapString(data, "ip"),
 		FraudScore:     mapInt64(data, "fraudScore"),
@@ -163,6 +164,14 @@ func buildProxyIPHealthResult(proxyId string, data map[string]interface{}, err e
 		RawData:        data,
 		UpdatedAt:      time.Now().Format(time.RFC3339),
 	}
+}
+
+func mapStringDefault(data map[string]interface{}, key string, fallback string) string {
+	value := strings.TrimSpace(mapString(data, key))
+	if value == "" {
+		return fallback
+	}
+	return value
 }
 
 func (a *App) persistProxyIPHealthResult(result ProxyIPHealthResult) {

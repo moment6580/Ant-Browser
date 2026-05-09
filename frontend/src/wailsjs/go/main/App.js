@@ -126,6 +126,10 @@ export function BookmarkSave(arg1) {
   return window['go']['main']['App']['BookmarkSave'](arg1);
 }
 
+export function BookmarkSyncToProfiles() {
+  return window['go']['main']['App']['BookmarkSyncToProfiles']();
+}
+
 export function BrowserClearCookies(arg1) {
   return window['go']['main']['App']['BrowserClearCookies'](arg1);
 }
@@ -192,6 +196,10 @@ export function BrowserInstanceStart(arg1) {
 
 export function BrowserInstanceStartByCode(arg1) {
   return window['go']['main']['App']['BrowserInstanceStartByCode'](arg1);
+}
+
+export function BrowserInstanceStartDirect(arg1) {
+  return window['go']['main']['App']['BrowserInstanceStartDirect'](arg1);
 }
 
 export function BrowserInstanceStartWithParams(arg1, arg2, arg3, arg4) {
@@ -370,6 +378,10 @@ export function GetMemoryStats() {
   return window['go']['main']['App']['GetMemoryStats']();
 }
 
+export function GetProxyCheckSettings() {
+  return window['go']['main']['App']['GetProxyCheckSettings']();
+}
+
 export function GetRunningInstances() {
   return window['go']['main']['App']['GetRunningInstances']();
 }
@@ -432,6 +444,10 @@ export function SaveBrowserProxies(arg1) {
 
 export function SaveBrowserSettings(arg1) {
   return window['go']['main']['App']['SaveBrowserSettings'](arg1);
+}
+
+export function SaveProxyCheckSettings(arg1) {
+  return window['go']['main']['App']['SaveProxyCheckSettings'](arg1);
 }
 
 export function SetLogLevel(arg1) {

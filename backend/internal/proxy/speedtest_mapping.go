@@ -2,6 +2,8 @@ package proxy
 
 import (
 	"fmt"
+	"net/url"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -26,25 +28,23 @@ func proxyConfigToMapping(src string) (map[string]any, error) {
 }
 
 func parseStandardProxy(src string, proxyType string) (map[string]any, error) {
-	rest := src[strings.Index(src, "://")+3:]
-
-	var username, password, hostport string
-	if atIdx := strings.LastIndex(rest, "@"); atIdx >= 0 {
-		userInfo := rest[:atIdx]
-		hostport = rest[atIdx+1:]
-		parts := strings.SplitN(userInfo, ":", 2)
-		username = parts[0]
-		if len(parts) > 1 {
-			password = parts[1]
-		}
-	} else {
-		hostport = rest
+	parsed, err := url.Parse(src)
+	if err != nil {
+		return nil, fmt.Errorf("代理地址解析失败: %w", err)
 	}
-	hostport = strings.SplitN(hostport, "/", 2)[0]
-
-	host, port := splitHostPort(hostport)
+	host := strings.TrimSpace(parsed.Hostname())
+	port, err := strconv.Atoi(parsed.Port())
+	if err != nil {
+		port = 0
+	}
 	if host == "" || port == 0 {
 		return nil, fmt.Errorf("无法解析地址: %s", src)
+	}
+	username := ""
+	password := ""
+	if parsed.User != nil {
+		username = parsed.User.Username()
+		password, _ = parsed.User.Password()
 	}
 
 	mapping := map[string]any{
@@ -76,26 +76,6 @@ func parseClashYAMLToMapping(src string) (map[string]any, error) {
 	}
 
 	return node, nil
-}
-
-func splitHostPort(hostport string) (string, int) {
-	if strings.HasPrefix(hostport, "[") {
-		if idx := strings.LastIndex(hostport, "]:"); idx >= 0 {
-			host := hostport[1:idx]
-			port := 0
-			fmt.Sscanf(hostport[idx+2:], "%d", &port)
-			return host, port
-		}
-		return strings.Trim(hostport, "[]"), 0
-	}
-	idx := strings.LastIndex(hostport, ":")
-	if idx < 0 {
-		return hostport, 0
-	}
-	host := hostport[:idx]
-	port := 0
-	fmt.Sscanf(hostport[idx+1:], "%d", &port)
-	return host, port
 }
 
 func min(a, b int) int {

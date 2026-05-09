@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, Loader2, Pencil, Plus, Search, Trash2, Wifi, X } from 'lucide-react'
-import { Button, ConfirmModal, FormItem, Input, Modal, Textarea, toast } from '../../../shared/components'
+import { Button, ConfirmModal, FormItem, Input, Modal, Select, Textarea, toast } from '../../../shared/components'
 import type { BrowserProxy } from '../types'
 import { browserProxyBatchTestSpeed, browserProxyTestSpeed, fetchBrowserProxies, fetchBrowserProxyGroups, saveBrowserProxies } from '../api'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
@@ -19,7 +19,7 @@ interface ProxyPickerModalProps {
 type SpeedResult = { ok: boolean; latencyMs: number; error: string }
 
 type ChainSocksHop = {
-  protocol?: string
+  protocol?: 'http' | 'socks5'
   server?: string
   port?: number
   username?: string
@@ -33,6 +33,7 @@ type ChainSocksConfig = {
 }
 
 interface ChainHopForm {
+  protocol: 'http' | 'socks5'
   server: string
   port: string
   username: string
@@ -49,11 +50,9 @@ interface ChainEditForm {
 const INITIAL_CHAIN_EDIT_FORM: ChainEditForm = {
   proxyName: '',
   localPort: '',
-  first: { server: '', port: '', username: '', password: '' },
-  second: { server: '', port: '', username: '', password: '' },
+  first: { protocol: 'http', server: '', port: '', username: '', password: '' },
+  second: { protocol: 'http', server: '', port: '', username: '', password: '' },
 }
-
-const LOCAL_PROXY_ID = '__local__'
 
 function parseChainSocks5Config(proxyConfig: string): ChainSocksConfig | null {
   const cfg = proxyConfig.trim()
@@ -69,7 +68,7 @@ function parseChainSocks5Config(proxyConfig: string): ChainSocksConfig | null {
     if (!raw || typeof raw !== 'object') return null
     const hop = raw as Record<string, unknown>
     const protocol = String(hop.protocol || '').trim().toLowerCase()
-    if (protocol && protocol !== 'socks5') return null
+    if (protocol && protocol !== 'socks5' && protocol !== 'http') return null
 
     const server = String(hop.server || '').trim()
     if (!server) return null
@@ -82,7 +81,7 @@ function parseChainSocks5Config(proxyConfig: string): ChainSocksConfig | null {
     if (password && !username) return null
 
     return {
-      protocol: 'socks5',
+      protocol: protocol === 'http' ? 'http' : 'socks5',
       server,
       port: portVal,
       username: username || undefined,
@@ -118,12 +117,14 @@ function toChainEditForm(proxyName: string, cfg: ChainSocksConfig): ChainEditFor
     proxyName,
     localPort: cfg.localPort ? String(cfg.localPort) : '',
     first: {
+      protocol: cfg.first?.protocol || 'socks5',
       server: cfg.first?.server || '',
       port: cfg.first?.port ? String(cfg.first.port) : '',
       username: cfg.first?.username || '',
       password: cfg.first?.password || '',
     },
     second: {
+      protocol: cfg.second?.protocol || 'socks5',
       server: cfg.second?.server || '',
       port: cfg.second?.port ? String(cfg.second.port) : '',
       username: cfg.second?.username || '',
@@ -134,6 +135,7 @@ function toChainEditForm(proxyName: string, cfg: ChainSocksConfig): ChainEditFor
 
 function buildChainProxyConfig(form: ChainEditForm): string {
   const parseHop = (label: string, hop: ChainHopForm): ChainSocksHop => {
+    const protocol = hop.protocol === 'socks5' ? 'socks5' : 'http'
     const server = hop.server.trim()
     if (!server) {
       throw new Error(`请输入${label}代理地址`)
@@ -162,7 +164,7 @@ function buildChainProxyConfig(form: ChainEditForm): string {
     }
 
     return {
-      protocol: 'socks5',
+      protocol,
       server,
       port,
       username: username || undefined,
@@ -499,7 +501,7 @@ export function ProxyPickerModal({ open, currentProxyId, onSelect, onClose, onPr
 
   const handleDeleteClick = (proxy: BrowserProxy, e: React.MouseEvent) => {
     e.stopPropagation()
-    if (proxy.proxyId === DIRECT_PROXY_ID || proxy.proxyId === LOCAL_PROXY_ID) return
+    if (proxy.proxyId === DIRECT_PROXY_ID) return
     setDeleteCandidate(proxy)
   }
 
@@ -639,12 +641,12 @@ export function ProxyPickerModal({ open, currentProxyId, onSelect, onClose, onPr
                   setEditName(e.target.value)
                 }
               }}
-              placeholder="例如：香港节点"
+              placeholder="节点名称"
             />
           </FormItem>
 
           <FormItem label="分组名称（可选）">
-            <Input value={editGroup} onChange={e => setEditGroup(e.target.value)} placeholder="例如：香港、美国" />
+            <Input value={editGroup} onChange={e => setEditGroup(e.target.value)} placeholder="分组名称" />
           </FormItem>
 
           {chainEditMode ? (
@@ -661,8 +663,18 @@ export function ProxyPickerModal({ open, currentProxyId, onSelect, onClose, onPr
               </FormItem>
 
               <div className="rounded-md border border-[var(--color-border)] p-3 space-y-3">
-                <h4 className="text-sm font-medium text-[var(--color-text-primary)]">第一层 SOCKS5</h4>
+                <h4 className="text-sm font-medium text-[var(--color-text-primary)]">第一层代理</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <FormItem label="协议">
+                    <Select
+                      value={chainEditForm.first.protocol}
+                      onChange={e => updateChainHop('first', 'protocol', e.target.value)}
+                      options={[
+                        { value: 'http', label: 'HTTP' },
+                        { value: 'socks5', label: 'SOCKS5' },
+                      ]}
+                    />
+                  </FormItem>
                   <FormItem label="代理地址" required>
                     <Input value={chainEditForm.first.server} onChange={e => updateChainHop('first', 'server', e.target.value)} />
                   </FormItem>
@@ -679,8 +691,18 @@ export function ProxyPickerModal({ open, currentProxyId, onSelect, onClose, onPr
               </div>
 
               <div className="rounded-md border border-[var(--color-border)] p-3 space-y-3">
-                <h4 className="text-sm font-medium text-[var(--color-text-primary)]">第二层 SOCKS5</h4>
+                <h4 className="text-sm font-medium text-[var(--color-text-primary)]">第二层代理</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <FormItem label="协议">
+                    <Select
+                      value={chainEditForm.second.protocol}
+                      onChange={e => updateChainHop('second', 'protocol', e.target.value)}
+                      options={[
+                        { value: 'http', label: 'HTTP' },
+                        { value: 'socks5', label: 'SOCKS5' },
+                      ]}
+                    />
+                  </FormItem>
                   <FormItem label="代理地址" required>
                     <Input value={chainEditForm.second.server} onChange={e => updateChainHop('second', 'server', e.target.value)} />
                   </FormItem>
@@ -771,8 +793,7 @@ function SpeedBadge({ testing, result }: { testing: boolean; result?: SpeedResul
 
 function ProxyRow({ proxy, selected, testing, speedResult, displayConfig, onSelect, onTest, onEdit, onDelete }: ProxyRowProps) {
   const isDirect = proxy.proxyId === DIRECT_PROXY_ID
-  const isLocal = proxy.proxyId === LOCAL_PROXY_ID
-  const disableDelete = isDirect || isLocal
+  const disableDelete = isDirect
 
   return (
     <div
@@ -810,7 +831,7 @@ function ProxyRow({ proxy, selected, testing, speedResult, displayConfig, onSele
       <button
         onClick={onDelete}
         disabled={disableDelete}
-        title={isDirect ? '直连不可删除' : isLocal ? '本地代理不可删除' : '删除代理'}
+        title={isDirect ? '直连不可删除' : '删除代理'}
         className="shrink-0 p-1 rounded text-[var(--color-text-muted)] hover:text-red-500 hover:bg-red-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
       >
         <Trash2 className="w-3.5 h-3.5" />

@@ -8,7 +8,7 @@ import {
 } from "react-router-dom";
 import { ThemeProvider } from "./shared/theme";
 import { Layout } from "./shared/layout";
-import { ToastContainer, Modal, Button, Loading } from "./shared/components";
+import { ToastContainer, Modal, Button, Loading, toast } from "./shared/components";
 import { AlertCircle } from "lucide-react";
 import { useNotificationStore } from "./store/notificationStore";
 import { useBackupStore } from "./store/backupStore";
@@ -171,10 +171,11 @@ function useWailsNotifications() {
       "proxy:bridge:failed",
       (data: { profileId: string; profileName: string; error: string }) => {
         addNotification({
-          type: "error",
-          title: "代理连接失败",
-          message: `「${data.profileName || data.profileId}」代理桥接启动失败：${data.error}`,
+          type: "warning",
+          title: "代理已降级直连",
+          message: `「${data.profileName || data.profileId}」${data.error}`,
         });
+        toast.warning(`「${data.profileName || data.profileId}」代理桥接失败，已直连启动`, 6000);
       },
     );
 

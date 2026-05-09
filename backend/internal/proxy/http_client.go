@@ -21,9 +21,21 @@ func buildProxyHTTPClient(
 	singboxMgr *SingBoxManager,
 	timeout time.Duration,
 ) (*http.Client, error) {
+	src = resolveProxyConfig(src, proxies, proxyId)
 	l := strings.ToLower(strings.TrimSpace(src))
 	if l == "" || l == "direct://" {
 		return &http.Client{Timeout: timeout}, nil
+	}
+
+	if IsChainSocks5Proxy(src) {
+		if xrayMgr == nil {
+			return nil, fmt.Errorf("xray 管理器未初始化")
+		}
+		socks5Addr, err := xrayMgr.EnsureBridge(src, proxies, proxyId)
+		if err != nil {
+			return nil, fmt.Errorf("xray 桥接启动失败: %w", err)
+		}
+		return buildSocks5HTTPClient(strings.TrimPrefix(socks5Addr, "socks5://"), timeout)
 	}
 
 	if IsSingBoxProtocol(src) {

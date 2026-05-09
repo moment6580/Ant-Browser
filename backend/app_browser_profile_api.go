@@ -78,7 +78,6 @@ func (a *App) migrateToSQLite() {
 		} else {
 			srcProxies = []browser.Proxy{
 				{ProxyId: "__direct__", ProxyName: "直连（不走代理）", ProxyConfig: "direct://"},
-				{ProxyId: "__local__", ProxyName: "本地代理", ProxyConfig: "http://127.0.0.1:7890"},
 			}
 			log.Info("代理表为空，初始化默认代理")
 		}

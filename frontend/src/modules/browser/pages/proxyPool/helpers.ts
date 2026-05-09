@@ -1,12 +1,11 @@
-import yaml from 'js-yaml'
+﻿import yaml from 'js-yaml'
 
 import type { BrowserProxy } from '../../types'
 
-export const BUILTIN_PROXY_IDS = new Set(['__direct__', '__local__'])
+export const BUILTIN_PROXY_IDS = new Set(['__direct__'])
 
 const BUILTIN_PROXIES: BrowserProxy[] = [
   { proxyId: '__direct__', proxyName: '直连（不走代理）', proxyConfig: 'direct://' },
-  { proxyId: '__local__', proxyName: '本地代理', proxyConfig: 'http://127.0.0.1:7890' },
 ]
 
 export interface ClashProxy {
@@ -17,7 +16,7 @@ export interface ClashProxy {
   [key: string]: unknown
 }
 
-export type ProxyImportMode = 'clash' | 'direct'
+export type ProxyImportMode = 'clash' | 'direct' | 'chain'
 
 export interface DirectImportForm {
   proxyName: string
@@ -27,6 +26,67 @@ export interface DirectImportForm {
   username: string
   password: string
 }
+
+export interface ChainHopForm {
+  protocol: 'http' | 'socks5'
+  server: string
+  port: string
+  username: string
+  password: string
+}
+
+export interface ChainImportForm {
+  proxyName: string
+  localPort: string
+  first: ChainHopForm
+  second: ChainHopForm
+}
+
+interface ChainSocks5HopConfig {
+  protocol: 'http' | 'socks5'
+  server: string
+  port: number
+  username?: string
+  password?: string
+}
+
+interface ChainSocks5Config {
+  localPort?: number
+  first: ChainSocks5HopConfig
+  second: ChainSocks5HopConfig
+}
+
+const CHAIN_SOCKS5_PREFIX = 'chain+socks5://'
+
+export const CHAIN_QUICK_IMPORT_TEMPLATE = `{
+  "name": "",
+  "group": "",
+  "localPort": "",
+  "first": {
+    "protocol": "http",
+    "server": "",
+    "port": "",
+    "username": "",
+    "password": ""
+  },
+  "second": {
+    "protocol": "http",
+    "server": "",
+    "port": "",
+    "username": "",
+    "password": ""
+  }
+}`
+
+export const DIRECT_QUICK_IMPORT_TEMPLATE = `{
+  "name": "",
+  "group": "",
+  "protocol": "http",
+  "server": "",
+  "port": "",
+  "username": "",
+  "password": ""
+}`
 
 export const DIRECT_PROXY_PROTOCOL_OPTIONS = [
   { value: 'http', label: 'HTTP' },
@@ -43,9 +103,114 @@ export const INITIAL_DIRECT_IMPORT_FORM: DirectImportForm = {
   password: '',
 }
 
+export const INITIAL_CHAIN_IMPORT_FORM: ChainImportForm = {
+  proxyName: '',
+  localPort: '',
+  first: {
+    protocol: 'http',
+    server: '',
+    port: '',
+    username: '',
+    password: '',
+  },
+  second: {
+    protocol: 'http',
+    server: '',
+    port: '',
+    username: '',
+    password: '',
+  },
+}
+
+function parseChainSocks5Config(proxyConfig: string): ChainSocks5Config | null {
+  const cfg = proxyConfig.trim()
+  if (!cfg.toLowerCase().startsWith(CHAIN_SOCKS5_PREFIX)) {
+    return null
+  }
+
+  const encoded = cfg.slice(CHAIN_SOCKS5_PREFIX.length)
+  if (!encoded) {
+    return null
+  }
+
+  const normalizeHop = (raw: unknown): ChainSocks5HopConfig | null => {
+    if (!raw || typeof raw !== 'object') return null
+    const hop = raw as Record<string, unknown>
+    const protocol = String(hop.protocol || '').trim().toLowerCase()
+    if (protocol && protocol !== 'socks5' && protocol !== 'http') return null
+
+    const server = String(hop.server || '').trim()
+    if (!server) return null
+
+    const portVal = Number(hop.port || 0)
+    if (!Number.isInteger(portVal) || portVal < 1 || portVal > 65535) return null
+
+    const username = String(hop.username || '').trim()
+    const password = hop.password === undefined || hop.password === null ? '' : String(hop.password)
+    if (password && !username) return null
+
+    return {
+      protocol: protocol === 'http' ? 'http' : 'socks5',
+      server,
+      port: portVal,
+      username: username || undefined,
+      password: password || undefined,
+    }
+  }
+
+  try {
+    const decoded = decodeURIComponent(encoded)
+    const parsed = JSON.parse(decoded) as Record<string, unknown>
+    const first = normalizeHop(parsed.first)
+    const second = normalizeHop(parsed.second)
+    if (!first || !second) return null
+
+    const localPortRaw = parsed.localPort
+    const localPortNum = localPortRaw === undefined || localPortRaw === null || localPortRaw === ''
+      ? 0
+      : Number(localPortRaw)
+    if (!Number.isInteger(localPortNum) || localPortNum < 0 || localPortNum > 65535) return null
+
+    return {
+      first,
+      second,
+      localPort: localPortNum > 0 ? localPortNum : undefined,
+    }
+  } catch {
+    return null
+  }
+}
+
+export function toChainImportForm(proxyName: string, proxyConfig: string): ChainImportForm | null {
+  const cfg = parseChainSocks5Config(proxyConfig)
+  if (!cfg) {
+    return null
+  }
+
+  return {
+    proxyName,
+    localPort: cfg.localPort ? String(cfg.localPort) : '',
+    first: {
+      protocol: cfg.first.protocol,
+      server: cfg.first.server,
+      port: String(cfg.first.port),
+      username: cfg.first.username || '',
+      password: cfg.first.password || '',
+    },
+    second: {
+      protocol: cfg.second.protocol,
+      server: cfg.second.server,
+      port: String(cfg.second.port),
+      username: cfg.second.username || '',
+      password: cfg.second.password || '',
+    },
+  }
+}
+
 export interface ImportCandidate {
   proxyName: string
   proxyConfig: string
+  groupName?: string
 }
 
 export interface ProxyDisplayInfo {
@@ -88,6 +253,11 @@ export function ensureBuiltinProxies(proxies: BrowserProxy[]): BrowserProxy[] {
 export function parseProxyInfo(proxyConfig: string): { type: string; server: string; port: number } {
   const cfg = proxyConfig.trim()
   if (cfg === 'direct://') return { type: 'direct', server: '-', port: 0 }
+
+  const chain = parseChainSocks5Config(cfg)
+  if (chain) {
+    return { type: 'chain-socks5', server: '127.0.0.1', port: chain.localPort || 0 }
+  }
 
   const urlMatch = cfg.match(/^([a-zA-Z0-9+\-]+):\/\//)
   if (urlMatch) {
@@ -258,6 +428,54 @@ function formatDirectProxyHost(raw: string): string {
   return host.includes(':') ? `[${host}]` : host
 }
 
+function normalizeDirectProtocol(raw: unknown): DirectImportForm['protocol'] {
+  const protocol = String(raw || '').trim().toLowerCase()
+  if (protocol === 'http' || protocol === 'https' || protocol === 'socks5') {
+    return protocol
+  }
+  if (protocol === 'socks' || protocol === 'socket') {
+    return 'socks5'
+  }
+  throw new Error('protocol 仅支持 http / https / socks5')
+}
+
+function parseDirectProxyURL(raw: string): DirectImportForm {
+  const normalized = normalizeDirectProxyConfig(raw)
+  if (!normalized) {
+    throw new Error('请输入标准代理地址')
+  }
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(normalized)) {
+    throw new Error('单行文本需要包含协议头，需要包含协议头')
+  }
+
+  let parsedURL: URL
+  try {
+    parsedURL = new URL(normalized)
+  } catch {
+    throw new Error('单行代理文本格式无效')
+  }
+
+  const protocol = normalizeDirectProtocol(parsedURL.protocol.replace(/:$/, ''))
+  const server = parsedURL.hostname.replace(/^\[(.*)\]$/, '$1').trim()
+  if (!server) {
+    throw new Error('代理地址缺少主机名')
+  }
+
+  const port = Number(parsedURL.port)
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error('代理地址缺少有效端口')
+  }
+
+  return {
+    proxyName: '',
+    protocol,
+    server,
+    port: String(port),
+    username: parsedURL.username ? decodeURIComponent(parsedURL.username) : '',
+    password: parsedURL.password ? decodeURIComponent(parsedURL.password) : '',
+  }
+}
+
 export function buildDirectImportCandidate(form: DirectImportForm): ImportCandidate {
   const serverInput = form.server.trim()
   if (!serverInput) {
@@ -311,6 +529,298 @@ export function buildDirectImportCandidate(form: DirectImportForm): ImportCandid
   }
 }
 
+interface ParsedDirectImportItem {
+  form: DirectImportForm
+  groupName: string
+}
+
+function parseDirectImportObject(payload: Record<string, unknown>, fallbackGroupName: string): ParsedDirectImportItem {
+  const proxyName = String(payload.name ?? payload.proxyName ?? '').trim()
+  const groupName = String(payload.group ?? payload.groupName ?? fallbackGroupName).trim()
+  const proxyURL = String(payload.url ?? payload.proxyUrl ?? payload.proxy ?? payload.proxyConfig ?? '').trim()
+  if (proxyURL) {
+    const parsedForm = parseDirectProxyURL(proxyURL)
+    return {
+      form: {
+        ...parsedForm,
+        proxyName: proxyName || parsedForm.proxyName,
+      },
+      groupName,
+    }
+  }
+
+  const protocol = normalizeDirectProtocol(payload.protocol ?? payload.scheme)
+  const server = String(payload.server ?? payload.host ?? '').trim()
+  if (!server) {
+    throw new Error('JSON 缺少 server')
+  }
+
+  const portValue = Number(payload.port)
+  if (!Number.isInteger(portValue) || portValue < 1 || portValue > 65535) {
+    throw new Error('JSON 缺少有效 port')
+  }
+
+  const username = String(payload.username ?? payload.user ?? '').trim()
+  const password = payload.password === undefined || payload.password === null ? '' : String(payload.password)
+  if (password && !username) {
+    throw new Error('填写 password 时请同时填写 username')
+  }
+
+  return {
+    form: {
+      proxyName,
+      protocol,
+      server,
+      port: String(portValue),
+      username,
+      password,
+    },
+    groupName,
+  }
+}
+
+function parseDirectImportItems(raw: string): { items: ParsedDirectImportItem[]; defaultGroupName: string } {
+  const text = raw.trim()
+  if (!text) {
+    throw new Error('请输入 HTTP / SOCKS5 文本')
+  }
+
+  if (text.startsWith('{') || text.startsWith('[')) {
+    let payload: unknown
+    try {
+      payload = JSON.parse(text)
+    } catch {
+      throw new Error('JSON 格式无效')
+    }
+
+    let defaultGroupName = ''
+    let sources: unknown[] = []
+    if (Array.isArray(payload)) {
+      sources = payload
+    } else if (payload && typeof payload === 'object') {
+      const record = payload as Record<string, unknown>
+      defaultGroupName = String(record.group ?? record.groupName ?? '').trim()
+      if (Array.isArray(record.proxies)) {
+        sources = record.proxies
+      } else if (Array.isArray(record.items)) {
+        sources = record.items
+      } else if (Array.isArray(record.list)) {
+        sources = record.list
+      } else {
+        sources = [record]
+      }
+    } else {
+      throw new Error('JSON 根节点必须是对象或数组')
+    }
+
+    const items = sources.map((item, index) => {
+      if (typeof item === 'string') {
+        return {
+          form: parseDirectProxyURL(item),
+          groupName: defaultGroupName,
+        }
+      }
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        throw new Error(`第 ${index + 1} 项格式无效`)
+      }
+      return parseDirectImportObject(item as Record<string, unknown>, defaultGroupName)
+    })
+
+    if (items.length === 0) {
+      throw new Error('JSON 未解析到可导入代理')
+    }
+    return { items, defaultGroupName }
+  }
+
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#') && !line.startsWith('//'))
+  if (lines.length === 0) {
+    throw new Error('请输入标准代理地址')
+  }
+
+  return {
+    items: lines.map((line) => ({
+      form: parseDirectProxyURL(line),
+      groupName: '',
+    })),
+    defaultGroupName: '',
+  }
+}
+
+export function parseDirectImportText(raw: string): { form: DirectImportForm; groupName: string } {
+  const { items } = parseDirectImportItems(raw)
+  if (items.length !== 1) {
+    throw new Error('检测到多条代理，请直接点击解析进行批量导入')
+  }
+  return items[0]
+}
+
+export function buildDirectImportCandidatesFromText(raw: string): { candidates: ImportCandidate[]; defaultGroupName: string } {
+  const { items, defaultGroupName } = parseDirectImportItems(raw)
+  return {
+    candidates: items.map((item) => ({
+      ...buildDirectImportCandidate(item.form),
+      groupName: item.groupName,
+    })),
+    defaultGroupName,
+  }
+}
+
+export function buildChainImportCandidate(form: ChainImportForm): ImportCandidate {
+  const parseHop = (label: string, hop: ChainHopForm): ChainSocks5HopConfig => {
+    const protocol = hop.protocol === 'socks5' ? 'socks5' : 'http'
+    const server = hop.server.trim()
+    if (!server) {
+      throw new Error(`请输入${label}代理地址`)
+    }
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(server)) {
+      throw new Error(`${label}代理地址只需要填写主机名或 IP，不需要协议头`)
+    }
+
+    const portInput = hop.port.trim()
+    if (!portInput) {
+      throw new Error(`请输入${label}代理端口`)
+    }
+    if (!/^\d+$/.test(portInput)) {
+      throw new Error(`${label}代理端口必须为数字`)
+    }
+
+    const port = Number(portInput)
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      throw new Error(`${label}代理端口必须在 1-65535 之间`)
+    }
+
+    const username = hop.username.trim()
+    const password = hop.password
+    if (password && !username) {
+      throw new Error(`${label}填写密码时请同时填写账号`)
+    }
+
+    return {
+      protocol,
+      server,
+      port,
+      username: username || undefined,
+      password: password || undefined,
+    }
+  }
+
+  const localPortInput = form.localPort.trim()
+  if (localPortInput && !/^\d+$/.test(localPortInput)) {
+    throw new Error('本地监听端口必须为数字')
+  }
+  const localPort = localPortInput ? Number(localPortInput) : 0
+  if (localPortInput && (!Number.isInteger(localPort) || localPort < 1 || localPort > 65535)) {
+    throw new Error('本地监听端口必须在 1-65535 之间')
+  }
+
+  const payload: ChainSocks5Config = {
+    first: parseHop('第一层', form.first),
+    second: parseHop('第二层', form.second),
+    localPort: localPort > 0 ? localPort : undefined,
+  }
+
+  return {
+    proxyName: form.proxyName.trim() || `链式代理-${payload.first.server}-${payload.second.server}`,
+    proxyConfig: `${CHAIN_SOCKS5_PREFIX}${encodeURIComponent(JSON.stringify(payload))}`,
+  }
+}
+
+function parseOptionalChainPort(raw: unknown, label: string): number | undefined {
+  if (raw === undefined || raw === null || String(raw).trim() === '') {
+    return undefined
+  }
+  const value = Number(raw)
+  if (!Number.isInteger(value) || value < 1 || value > 65535) {
+    throw new Error(`${label}必须在 1-65535 之间`)
+  }
+  return value
+}
+
+function parseChainQuickImportHop(raw: unknown, label: string): ChainSocks5HopConfig {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error(`${label}缺少配置`)
+  }
+
+  const hop = raw as Record<string, unknown>
+  const protocol = String(hop.protocol || 'socks5').trim().toLowerCase()
+  if (protocol !== 'socks5' && protocol !== 'http') {
+    throw new Error(`${label}仅支持 http / socks5`)
+  }
+
+  const server = String(hop.server || '').trim()
+  if (!server) {
+    throw new Error(`${label}缺少 server`)
+  }
+
+  const portValue = Number(hop.port)
+  if (!Number.isInteger(portValue) || portValue < 1 || portValue > 65535) {
+    throw new Error(`${label}缺少有效 port`)
+  }
+
+  const username = String(hop.username || '').trim()
+  const password = hop.password === undefined || hop.password === null ? '' : String(hop.password)
+  if (password && !username) {
+    throw new Error(`${label}填写 password 时请同时填写 username`)
+  }
+
+  return {
+    protocol: protocol === 'http' ? 'http' : 'socks5',
+    server,
+    port: portValue,
+    username: username || undefined,
+    password: password || undefined,
+  }
+}
+
+export function parseChainImportJSON(raw: string): { form: ChainImportForm; groupName: string } {
+  const text = raw.trim()
+  if (!text) {
+    throw new Error('请输入链式代理 JSON')
+  }
+
+  let payload: Record<string, unknown>
+  try {
+    payload = JSON.parse(text) as Record<string, unknown>
+  } catch {
+    throw new Error('JSON 格式无效')
+  }
+
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('JSON 根节点必须是对象')
+  }
+
+  const first = parseChainQuickImportHop(payload.first, '第一层')
+  const second = parseChainQuickImportHop(payload.second, '第二层')
+  const localPort = parseOptionalChainPort(payload.localPort, 'localPort')
+  const proxyName = String(payload.name ?? payload.proxyName ?? '').trim()
+  const groupName = String(payload.group ?? payload.groupName ?? '').trim()
+
+  return {
+    form: {
+      proxyName,
+      localPort: localPort ? String(localPort) : '',
+      first: {
+        protocol: first.protocol,
+        server: first.server,
+        port: String(first.port),
+        username: first.username || '',
+        password: first.password || '',
+      },
+      second: {
+        protocol: second.protocol,
+        server: second.server,
+        port: String(second.port),
+        username: second.username || '',
+        password: second.password || '',
+      },
+    },
+    groupName,
+  }
+}
+
 export function buildImportCandidatesFromClash(parsedProxies: ClashProxy[], prefix: string): ImportCandidate[] {
   return parsedProxies.map((proxy, index) => ({
     proxyName: resolveImportedProxyName(proxy, index, prefix),
@@ -325,7 +835,7 @@ export function buildImportPreview(candidates: ImportCandidate[], groupName: str
       proxyId: `preview-${index}`,
       proxyName: candidate.proxyName,
       proxyConfig: candidate.proxyConfig,
-      groupName,
+      groupName: candidate.groupName || groupName,
       sourceId: '',
       sourceUrl: '',
       sourceAutoRefresh: false,

@@ -7,11 +7,7 @@ import (
 	"strings"
 )
 
-var defaultBrowserStartURLs = []string{
-	"https://ippure.com/",
-	"https://iplark.com/",
-	"https://ping0.cc/",
-}
+var defaultBrowserStartURLs = []string{}
 
 func DefaultBrowserStartURLs() []string {
 	return append([]string{}, defaultBrowserStartURLs...)
@@ -111,6 +107,8 @@ func normalizeConfig(config *Config) {
 	}
 	if config.Browser.DefaultStartURLs == nil {
 		config.Browser.DefaultStartURLs = append([]string{}, defaultConfig.Browser.DefaultStartURLs...)
+	} else if isLegacyVerificationStartURLs(config.Browser.DefaultStartURLs) {
+		config.Browser.DefaultStartURLs = []string{}
 	}
 	if config.Browser.StartReadyTimeoutMs <= 0 {
 		config.Browser.StartReadyTimeoutMs = defaultConfig.Browser.StartReadyTimeoutMs
@@ -129,6 +127,18 @@ func normalizeConfig(config *Config) {
 	}
 	if config.Browser.Profiles == nil {
 		config.Browser.Profiles = []BrowserProfileConfig{}
+	}
+	if config.ProxyCheck.BridgeStartTimeoutMs <= 0 {
+		config.ProxyCheck.BridgeStartTimeoutMs = defaultConfig.ProxyCheck.BridgeStartTimeoutMs
+	}
+	if strings.TrimSpace(config.ProxyCheck.SpeedTargetID) == "" {
+		config.ProxyCheck.SpeedTargetID = defaultConfig.ProxyCheck.SpeedTargetID
+	}
+	if strings.TrimSpace(config.ProxyCheck.IPHealthTargetID) == "" {
+		config.ProxyCheck.IPHealthTargetID = defaultConfig.ProxyCheck.IPHealthTargetID
+	}
+	if len(config.ProxyCheck.Targets) == 0 {
+		config.ProxyCheck.Targets = append([]ProxyCheckTarget{}, defaultConfig.ProxyCheck.Targets...)
 	}
 
 	if config.LaunchServer.Port <= 0 {
@@ -181,6 +191,19 @@ func isLegacyDefaultLogPath(path string) bool {
 	return strings.EqualFold(filepath.ToSlash(strings.TrimSpace(path)), "logs/app.log")
 }
 
+func isLegacyVerificationStartURLs(urls []string) bool {
+	legacy := []string{"https://ippure.com/", "https://iplark.com/", "https://ping0.cc/"}
+	if len(urls) != len(legacy) {
+		return false
+	}
+	for i, url := range urls {
+		if !strings.EqualFold(strings.TrimSpace(url), legacy[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // DefaultConfig 返回默认配置
 func DefaultConfig() *Config {
 	return &Config{
@@ -213,6 +236,12 @@ func DefaultConfig() *Config {
 			RestoreLastSession:     false,
 			StartReadyTimeoutMs:    3000,
 			StartStableWindowMs:    1200,
+		},
+		ProxyCheck: ProxyCheckConfig{
+			BridgeStartTimeoutMs: 15000,
+			SpeedTargetID:        "",
+			IPHealthTargetID:     "",
+			Targets:              []ProxyCheckTarget{},
 		},
 		Logging: LoggingConfig{
 			Level:           "info",

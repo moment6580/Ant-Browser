@@ -1,4 +1,4 @@
-export const DOC_TUTORIAL = `# 使用教程
+﻿export const DOC_TUTORIAL = `# 使用教程
 
 ## 只在应用内使用
 
@@ -178,7 +178,7 @@ export const DOC_CORE_INTRO = `# 内核介绍
 
 \`\`\`text
 chrome/
-  chrome142/
+  chrome-<version>/
     chrome.exe
     ...
 \`\`\`
@@ -190,7 +190,7 @@ chrome/
 指纹浏览器 -> 内核管理 -> 下载内核
 
 方式 B：手动下载
-下载 ZIP -> 解压到 chrome/ -> 回到内核管理确认识别
+下载 ZIP -> 解压到 chrome/<version>/ -> 回到内核管理确认识别
 \`\`\`
 
 ## 下载渠道
@@ -219,9 +219,9 @@ export const DOC_PROXY_INTRO = `# 代理介绍
 ## 直接录入示例
 
 \`\`\`text
-http://127.0.0.1:7890
-socks5://127.0.0.1:1080
-http://user:pass@127.0.0.1:7890
+<proxy-url>
+<proxy-url>
+<proxy-url>
 \`\`\`
 
 ## Clash YAML 导入示例
@@ -326,6 +326,8 @@ curl -H "X-Ant-Api-Key: <your-api-key>" http://127.0.0.1:19876/api/health
   }
 }
 \`\`\`
+
+也可以把 \`code / profileId / profileName / keyword / tags / groupId / matchMode\` 放在请求体顶层；新接入建议统一放进 \`selector\`。
 
 ## 怎么选接口
 

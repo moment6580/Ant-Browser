@@ -74,6 +74,7 @@ export interface AutomationScriptRunInput {
   paramsText?: string;
   useScriptSelector?: boolean;
   useScriptParams?: boolean;
+  timeoutMs?: number;
   launchCode?: string;
   startByCodeBeforeRun?: boolean;
 }

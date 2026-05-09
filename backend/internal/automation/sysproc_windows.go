@@ -11,3 +11,7 @@ import (
 func hideWindow(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 }
+
+func prepareTaskCommand(cmd *exec.Cmd) {
+	hideWindow(cmd)
+}

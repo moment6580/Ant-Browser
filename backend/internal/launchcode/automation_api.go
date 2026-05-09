@@ -17,6 +17,7 @@ type automationScriptRunAPIRequest struct {
 	Params            json.RawMessage `json:"params"`
 	UseScriptSelector *bool           `json:"useScriptSelector"`
 	UseScriptParams   *bool           `json:"useScriptParams"`
+	TimeoutMs         int             `json:"timeoutMs"`
 }
 
 type automationScriptSummary struct {
@@ -324,6 +325,7 @@ func normalizeAutomationRunRequest(req automationScriptRunAPIRequest) (automatio
 		ParamsText:        paramsText,
 		UseScriptSelector: useScriptSelector,
 		UseScriptParams:   useScriptParams,
+		TimeoutMs:         req.TimeoutMs,
 	}, nil
 }
 

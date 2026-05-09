@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import yaml from 'js-yaml'
 import { Button, FormItem, Input, Modal, Select, Table, Textarea, toast } from '../../../shared/components'
 import type { TableColumn } from '../../../shared/components/Table'
 import type { BrowserProxy } from '../types'
 import { fetchClashImportFromURL, saveBrowserProxies } from '../api'
+import { DIRECT_QUICK_IMPORT_TEMPLATE, buildDirectImportCandidatesFromText, parseDirectImportText } from '../pages/proxyPool/helpers'
 
 interface ProxyImportModalProps {
   open: boolean
@@ -35,6 +36,7 @@ interface DirectImportForm {
 }
 
 interface ChainHopForm {
+  protocol: 'http' | 'socks5'
   server: string
   port: string
   username: string
@@ -67,12 +69,14 @@ const INITIAL_CHAIN_IMPORT_FORM: ChainImportForm = {
   proxyName: '',
   localPort: '',
   first: {
+    protocol: 'http',
     server: '',
     port: '',
     username: '',
     password: '',
   },
   second: {
+    protocol: 'http',
     server: '',
     port: '',
     username: '',
@@ -83,6 +87,7 @@ const INITIAL_CHAIN_IMPORT_FORM: ChainImportForm = {
 interface ImportCandidate {
   proxyName: string
   proxyConfig: string
+  groupName?: string
 }
 
 interface ProxyDisplayInfo {
@@ -98,7 +103,7 @@ interface ProxyDisplayInfo {
 const CHAIN_SOCKS5_PREFIX = 'chain+socks5://'
 
 interface ChainSocks5HopConfig {
-  protocol: 'socks5'
+  protocol: 'http' | 'socks5'
   server: string
   port: number
   username?: string
@@ -125,7 +130,7 @@ function parseChainSocks5Config(proxyConfig: string): ChainSocks5Config | null {
     if (!raw || typeof raw !== 'object') return null
     const hop = raw as Record<string, unknown>
     const protocol = String(hop.protocol || '').trim().toLowerCase()
-    if (protocol && protocol !== 'socks5') return null
+    if (protocol && protocol !== 'socks5' && protocol !== 'http') return null
 
     const server = String(hop.server || '').trim()
     if (!server) return null
@@ -138,7 +143,7 @@ function parseChainSocks5Config(proxyConfig: string): ChainSocks5Config | null {
     if (password && !username) return null
 
     return {
-      protocol: 'socks5',
+      protocol: protocol === 'http' ? 'http' : 'socks5',
       server,
       port: portVal,
       username: username || undefined,
@@ -380,6 +385,7 @@ function buildDirectImportCandidate(form: DirectImportForm): ImportCandidate {
 
 function buildChainImportCandidate(form: ChainImportForm): ImportCandidate {
   const parseHop = (label: string, hop: ChainHopForm): ChainSocks5HopConfig => {
+    const protocol = hop.protocol === 'socks5' ? 'socks5' : 'http'
     const server = hop.server.trim()
     if (!server) {
       throw new Error(`请输入${label}代理地址`)
@@ -408,7 +414,7 @@ function buildChainImportCandidate(form: ChainImportForm): ImportCandidate {
     }
 
     return {
-      protocol: 'socks5',
+      protocol,
       server,
       port,
       username: username || undefined,
@@ -459,7 +465,7 @@ function buildImportPreview(candidates: ImportCandidate[], groupName: string): P
       proxyId: `preview-${index}`,
       proxyName: candidate.proxyName,
       proxyConfig: candidate.proxyConfig,
-      groupName,
+      groupName: candidate.groupName || groupName,
       type: info.type || '-',
       server: info.server || '-',
       port: info.port || 0,
@@ -563,6 +569,7 @@ export function ProxyImportModal({
   const [importDnsServers, setImportDnsServers] = useState('')
   const [importNamePrefix, setImportNamePrefix] = useState('')
   const [importGroupName, setImportGroupName] = useState('')
+  const [directImportText, setDirectImportText] = useState('')
   const [directImportForm, setDirectImportForm] = useState<DirectImportForm>(() => ({ ...INITIAL_DIRECT_IMPORT_FORM }))
   const [chainImportForm, setChainImportForm] = useState<ChainImportForm>(() => ({ ...INITIAL_CHAIN_IMPORT_FORM }))
   const [previewModalOpen, setPreviewModalOpen] = useState(false)
@@ -583,6 +590,7 @@ export function ProxyImportModal({
     setImportDnsServers('')
     setImportNamePrefix('')
     setImportGroupName('')
+    setDirectImportText('')
     setDirectImportForm({ ...INITIAL_DIRECT_IMPORT_FORM })
     setChainImportForm({ ...INITIAL_CHAIN_IMPORT_FORM })
     setPreviewList([])
@@ -644,20 +652,62 @@ export function ProxyImportModal({
   const handleParseImport = () => {
     try {
       const prefix = importNamePrefix.trim()
-      const candidates = importMode === 'clash'
-        ? buildImportCandidatesFromClash(parseClashImportText(importText), prefix)
-        : importMode === 'direct'
-          ? [buildDirectImportCandidate(directImportForm)]
-          : [buildChainImportCandidate(chainImportForm)]
+      let candidates
+      let previewGroupName = importGroupName.trim()
+      if (importMode === 'clash') {
+        candidates = buildImportCandidatesFromClash(parseClashImportText(importText), prefix)
+      } else if (importMode === 'direct') {
+        if (directImportText.trim()) {
+          const parsed = buildDirectImportCandidatesFromText(directImportText)
+          candidates = parsed.candidates
+          if (!previewGroupName) {
+            previewGroupName = parsed.defaultGroupName
+          }
+        } else {
+          candidates = [buildDirectImportCandidate(directImportForm)]
+        }
+      } else {
+        candidates = [buildChainImportCandidate(chainImportForm)]
+      }
       if (!candidates.length) {
         toast.error('未解析到可导入代理')
         return
       }
-      const preview = buildImportPreview(candidates, importGroupName.trim())
+      const preview = buildImportPreview(candidates, previewGroupName)
       setPreviewList(preview)
       setPreviewModalOpen(true)
     } catch (error: any) {
       toast.error(`解析失败: ${error?.message || '未知错误'}`)
+    }
+  }
+
+  const handleFillDirectTemplate = () => {
+    setDirectImportText(DIRECT_QUICK_IMPORT_TEMPLATE)
+  }
+
+  const handleCopyDirectTemplate = async () => {
+    try {
+      if (!navigator?.clipboard?.writeText) {
+        throw new Error('当前环境不支持剪贴板')
+      }
+      await navigator.clipboard.writeText(DIRECT_QUICK_IMPORT_TEMPLATE)
+      toast.success('JSON 模板已复制')
+    } catch (error: any) {
+      toast.error(error?.message || '复制模板失败')
+    }
+  }
+
+  const handleApplyDirectText = () => {
+    try {
+      const { form, groupName } = parseDirectImportText(directImportText)
+      setDirectImportForm(form)
+      if (groupName) {
+        setImportGroupName(groupName)
+      }
+      setDirectImportText('')
+      toast.success('文本已应用')
+    } catch (error: any) {
+      toast.error(error?.message || '文本应用失败')
     }
   }
 
@@ -687,7 +737,7 @@ export function ProxyImportModal({
         proxyName: p.proxyName,
         proxyConfig: p.proxyConfig,
         dnsServers: importMode === 'clash' ? importDnsServers.trim() || undefined : undefined,
-        groupName: importGroupName.trim() || undefined,
+        groupName: p.groupName.trim() || undefined,
         sourceId: sourceID || undefined,
         sourceUrl: sourceURL || undefined,
         sourceNamePrefix: sourceNamePrefix || undefined,
@@ -719,8 +769,11 @@ export function ProxyImportModal({
   const canParseImport = importMode === 'clash'
     ? !!importText.trim()
     : importMode === 'direct'
-      ? !!directImportForm.server.trim() && !!directImportForm.port.trim()
-      : !!chainImportForm.first.server.trim() && !!chainImportForm.first.port.trim() && !!chainImportForm.second.server.trim() && !!chainImportForm.second.port.trim()
+      ? !!directImportText.trim() || (!!directImportForm.server.trim() && !!directImportForm.port.trim())
+      : !!chainImportForm.first.server.trim()
+        && !!chainImportForm.first.port.trim()
+        && !!chainImportForm.second.server.trim()
+        && !!chainImportForm.second.port.trim()
 
   const previewColumns = useMemo<TableColumn<ProxyDisplayInfo>[]>(() => [
     { key: 'proxyName', title: '代理名称', width: '200px' },
@@ -769,7 +822,7 @@ export function ProxyImportModal({
               variant={importMode === 'direct' ? undefined : 'secondary'}
               onClick={() => handleImportModeChange('direct')}
             >
-              HTTP / SOCKS5（测试中）
+              HTTP / SOCKS5
             </Button>
             <Button
               variant={importMode === 'chain' ? undefined : 'secondary'}
@@ -782,7 +835,7 @@ export function ProxyImportModal({
             {importMode === 'clash'
               ? '支持粘贴 Clash YAML，或通过订阅 URL 自动拉取并解析（含 proxies、dns、proxy-groups）'
               : importMode === 'direct'
-                ? '支持单条录入 HTTP / HTTPS / SOCKS5 代理，账号和密码均可留空，导入后直接生效，不走 Clash 桥接'
+                ? '支持单条录入 HTTP / HTTPS / SOCKS5 代理，也支持 JSON 或多行标准代理文本批量导入，导入后直接生效，不走 Clash 桥接'
                 : '支持两层 SOCKS5 链式代理，导入后将由本地桥接生成 127.0.0.1 SOCKS5 供 Chromium 使用'}
           </p>
           {importMode === 'clash' && (
@@ -798,7 +851,7 @@ export function ProxyImportModal({
                         setImportResolvedUrl('')
                       }
                     }}
-                    placeholder="https://example.com/clash/subscription"
+                    placeholder="订阅 URL"
                     className="flex-1"
                   />
                   <Button
@@ -826,52 +879,76 @@ export function ProxyImportModal({
             </>
           )}
           {importMode === 'direct' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <FormItem label="代理协议" required>
-                <Select
-                  options={[...DIRECT_PROXY_PROTOCOL_OPTIONS]}
-                  value={directImportForm.protocol}
-                  onChange={e => setDirectImportForm(prev => ({ ...prev, protocol: e.target.value as DirectImportForm['protocol'] }))}
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <FormItem label="代理协议" required>
+                  <Select
+                    options={[...DIRECT_PROXY_PROTOCOL_OPTIONS]}
+                    value={directImportForm.protocol}
+                    onChange={e => setDirectImportForm(prev => ({ ...prev, protocol: e.target.value as DirectImportForm['protocol'] }))}
+                  />
+                </FormItem>
+                <FormItem label="代理名称（可选）">
+                  <Input
+                    value={directImportForm.proxyName}
+                    onChange={e => setDirectImportForm(prev => ({ ...prev, proxyName: e.target.value }))}
+                    placeholder="节点名称"
+                  />
+                </FormItem>
+                <FormItem label="代理地址" required>
+                  <Input
+                    value={directImportForm.server}
+                    onChange={e => setDirectImportForm(prev => ({ ...prev, server: e.target.value }))}
+                    placeholder="例如：127.0.0.1 或 hk.example.com"
+                  />
+                </FormItem>
+                <FormItem label="代理端口" required>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={65535}
+                    value={directImportForm.port}
+                    onChange={e => setDirectImportForm(prev => ({ ...prev, port: e.target.value }))}
+                    placeholder="例如：1080"
+                  />
+                </FormItem>
+                <FormItem label="账号（可选）">
+                  <Input
+                    value={directImportForm.username}
+                    onChange={e => setDirectImportForm(prev => ({ ...prev, username: e.target.value }))}
+                    placeholder="留空则不使用认证"
+                  />
+                </FormItem>
+                <FormItem label="密码（可选）">
+                  <Input
+                    type="password"
+                    value={directImportForm.password}
+                    onChange={e => setDirectImportForm(prev => ({ ...prev, password: e.target.value }))}
+                    placeholder="留空则不使用密码"
+                  />
+                </FormItem>
+              </div>
+              <FormItem label="文本辅助（可选）" hint="支持单个 JSON、JSON 数组，或多行 http:// / https:// / socks5://，每行一个">
+                <Textarea
+                  value={directImportText}
+                  onChange={e => setDirectImportText(e.target.value)}
+                  rows={8}
+                  placeholder={DIRECT_QUICK_IMPORT_TEMPLATE}
                 />
-              </FormItem>
-              <FormItem label="代理名称（可选）">
-                <Input
-                  value={directImportForm.proxyName}
-                  onChange={e => setDirectImportForm(prev => ({ ...prev, proxyName: e.target.value }))}
-                  placeholder="例如：香港节点"
-                />
-              </FormItem>
-              <FormItem label="代理地址" required>
-                <Input
-                  value={directImportForm.server}
-                  onChange={e => setDirectImportForm(prev => ({ ...prev, server: e.target.value }))}
-                  placeholder="例如：127.0.0.1 或 hk.example.com"
-                />
-              </FormItem>
-              <FormItem label="代理端口" required>
-                <Input
-                  type="number"
-                  min={1}
-                  max={65535}
-                  value={directImportForm.port}
-                  onChange={e => setDirectImportForm(prev => ({ ...prev, port: e.target.value }))}
-                  placeholder="例如：1080"
-                />
-              </FormItem>
-              <FormItem label="账号（可选）">
-                <Input
-                  value={directImportForm.username}
-                  onChange={e => setDirectImportForm(prev => ({ ...prev, username: e.target.value }))}
-                  placeholder="留空则不使用认证"
-                />
-              </FormItem>
-              <FormItem label="密码（可选）">
-                <Input
-                  type="password"
-                  value={directImportForm.password}
-                  onChange={e => setDirectImportForm(prev => ({ ...prev, password: e.target.value }))}
-                  placeholder="留空则不使用密码"
-                />
+                <div className="mt-2 flex gap-2">
+                  <Button size="sm" variant="secondary" onClick={handleFillDirectTemplate}>
+                    填入模板
+                  </Button>
+                  <Button size="sm" variant="secondary" onClick={() => void handleCopyDirectTemplate()}>
+                    复制模板
+                  </Button>
+                  <Button size="sm" variant="secondary" onClick={handleApplyDirectText} disabled={!directImportText.trim()}>
+                    应用文本
+                  </Button>
+                </div>
+                <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+                  留空则按上方表单导入；有内容则点击“解析”按文本直接导入，可批量。
+                </p>
               </FormItem>
             </div>
           )}
@@ -882,7 +959,7 @@ export function ProxyImportModal({
                   <Input
                     value={chainImportForm.proxyName}
                     onChange={e => setChainImportForm(prev => ({ ...prev, proxyName: e.target.value }))}
-                    placeholder="例如：双层香港链路"
+                    placeholder="链路名称"
                   />
                 </FormItem>
                 <FormItem label="本地监听端口（可选）">
@@ -898,8 +975,18 @@ export function ProxyImportModal({
               </div>
 
               <div className="rounded-md border border-[var(--color-border)] p-3 space-y-3">
-                <h4 className="text-sm font-medium text-[var(--color-text-primary)]">第一层 SOCKS5</h4>
+                <h4 className="text-sm font-medium text-[var(--color-text-primary)]">第一层代理</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <FormItem label="协议">
+                    <Select
+                      value={chainImportForm.first.protocol}
+                      onChange={e => updateChainHop('first', 'protocol', e.target.value)}
+                      options={[
+                        { value: 'http', label: 'HTTP' },
+                        { value: 'socks5', label: 'SOCKS5' },
+                      ]}
+                    />
+                  </FormItem>
                   <FormItem label="代理地址" required>
                     <Input
                       value={chainImportForm.first.server}
@@ -936,8 +1023,18 @@ export function ProxyImportModal({
               </div>
 
               <div className="rounded-md border border-[var(--color-border)] p-3 space-y-3">
-                <h4 className="text-sm font-medium text-[var(--color-text-primary)]">第二层 SOCKS5</h4>
+                <h4 className="text-sm font-medium text-[var(--color-text-primary)]">第二层代理</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <FormItem label="协议">
+                    <Select
+                      value={chainImportForm.second.protocol}
+                      onChange={e => updateChainHop('second', 'protocol', e.target.value)}
+                      options={[
+                        { value: 'http', label: 'HTTP' },
+                        { value: 'socks5', label: 'SOCKS5' },
+                      ]}
+                    />
+                  </FormItem>
                   <FormItem label="代理地址" required>
                     <Input
                       value={chainImportForm.second.server}
@@ -979,7 +1076,7 @@ export function ProxyImportModal({
             <Input
               value={importGroupName}
               onChange={e => setImportGroupName(e.target.value)}
-              placeholder="例如：香港、美国、机场A"
+              placeholder="分组名称"
               list="proxy-groups-datalist"
             />
             {groups.length > 0 && (

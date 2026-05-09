@@ -116,7 +116,10 @@ export function writeGlobalRefreshConfig(enabled: boolean, intervalM: number) {
 
 export function toLatencyValue(ok: boolean, latencyMs: number, error?: string): number {
   if (ok) return latencyMs
-  return error?.includes('不支持') ? -3 : -2
+  const message = (error || '').toLowerCase()
+  if (message.includes('不支持')) return -3
+  if (message.includes('timeout') || message.includes('超时') || message.includes('deadline exceeded') || message.includes('i/o timeout')) return -2
+  return -4
 }
 
 export function readLatencyCache(): Record<string, number> {

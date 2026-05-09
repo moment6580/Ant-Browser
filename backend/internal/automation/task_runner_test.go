@@ -395,6 +395,66 @@ func TestRunScriptTaskClosesBrowserConnections(t *testing.T) {
 	}
 }
 
+func TestRunScriptTaskTerminatesHungScriptOnTimeout(t *testing.T) {
+	nodeExecPath := lookupNodeExecutable(t)
+
+	cfg := config.DefaultConfig()
+	cfg.Automation.Enabled = true
+	cfg.Automation.NodeSource = config.AutomationNodeSourceSystem
+	cfg.Automation.SystemNodePath = nodeExecPath
+	cfg.Automation.NodeVersion = "test-node"
+	cfg.Automation.PlaywrightCoreVersion = "1.59.0"
+	cfg.Automation.RuntimeVersion = "test-runtime"
+
+	manager := NewManager(t.TempDir(), cfg, nil, Options{})
+
+	state := manager.CurrentState()
+	if err := writeRunnerScript(state.RunnerPath); err != nil {
+		t.Fatalf("write runner script failed: %v", err)
+	}
+	if err := writeMockPlaywrightModule(state.RuntimeDir, cfg.Automation.PlaywrightCoreVersion); err != nil {
+		t.Fatalf("write mock playwright module failed: %v", err)
+	}
+
+	scriptDir := filepath.Join(state.RuntimeDir, "tmp", "scripts")
+	if err := os.MkdirAll(scriptDir, 0o755); err != nil {
+		t.Fatalf("create script dir failed: %v", err)
+	}
+	scriptPath := filepath.Join(scriptDir, "script-timeout.cjs")
+	scriptSource := `module.exports.run = async () => {
+  await new Promise(() => setInterval(() => {}, 1000))
+}`
+	if err := os.WriteFile(scriptPath, []byte(scriptSource), 0o644); err != nil {
+		t.Fatalf("write script failed: %v", err)
+	}
+
+	startedAt := time.Now()
+	_, err := manager.RunScriptTask(context.Background(), ScriptTaskRequest{
+		TaskKey:       "script:timeout",
+		ScriptPath:    scriptPath,
+		LaunchBaseURL: "http://127.0.0.1",
+		Timeout:       150 * time.Millisecond,
+	})
+	elapsed := time.Since(startedAt)
+	if err == nil {
+		t.Fatalf("expected RunScriptTask to fail on timeout")
+	}
+	if !strings.Contains(err.Error(), "超时") {
+		t.Fatalf("expected timeout error, got %v", err)
+	}
+	if elapsed > 3*time.Second {
+		t.Fatalf("expected timeout to terminate quickly, took %s", elapsed)
+	}
+
+	manager.mu.Lock()
+	activeTaskCount := len(manager.activeTasks)
+	profileTaskCount := len(manager.profileTask)
+	manager.mu.Unlock()
+	if activeTaskCount != 0 || profileTaskCount != 0 {
+		t.Fatalf("expected timed out task to be unregistered, active=%d profile=%d", activeTaskCount, profileTaskCount)
+	}
+}
+
 func lookupNodeExecutable(t *testing.T) string {
 	t.Helper()
 

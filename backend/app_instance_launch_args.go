@@ -58,6 +58,39 @@ func browserDefaultStartURLs(cfg *config.Config) []string {
 	return config.DefaultBrowserStartURLs()
 }
 
+func (a *App) browserDefaultStartURLs() []string {
+	return mergeStartURLs(browserDefaultStartURLs(a.config), bookmarkStartURLs(a.BookmarkList()))
+}
+
+func bookmarkStartURLs(bookmarks []BrowserBookmark) []string {
+	if len(bookmarks) == 0 {
+		return nil
+	}
+	urls := make([]string, 0, len(bookmarks))
+	for _, bookmark := range bookmarks {
+		if bookmark.OpenOnStart {
+			urls = append(urls, bookmark.URL)
+		}
+	}
+	return normalizeNonEmptyStrings(urls)
+}
+
+func mergeStartURLs(groups ...[]string) []string {
+	seen := map[string]struct{}{}
+	out := []string{}
+	for _, group := range groups {
+		for _, item := range normalizeNonEmptyStrings(group) {
+			key := strings.ToLower(item)
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
 func browserRestoreLastSession(cfg *config.Config) bool {
 	if cfg == nil {
 		return false

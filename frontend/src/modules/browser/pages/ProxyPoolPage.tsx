@@ -1,13 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ConfirmModal, toast } from '../../../shared/components'
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Button, ConfirmModal, FormItem, Input, Modal, Textarea, toast } from '../../../shared/components'
 import type { SortOrder } from '../../../shared/components/Table'
-import type { BrowserProxy, ProxyIPHealthResult } from '../types'
-import { fetchBrowserProxies, fetchBrowserProxyGroups, saveBrowserProxies, browserProxyTestSpeed, browserProxyBatchTestSpeed, browserProxyCheckIPHealth, browserProxyBatchCheckIPHealth, fetchClashImportFromURL } from '../api'
+import type { BrowserProxy, ProxyCheckSettings, ProxyIPHealthResult } from '../types'
+import { createDefaultProxyCheckSettings, fetchBrowserProxies, fetchBrowserProxyGroups, saveBrowserProxies, browserProxyTestSpeed, browserProxyBatchTestSpeed, browserProxyCheckIPHealth, browserProxyBatchCheckIPHealth, fetchClashImportFromURL, fetchProxyCheckSettings, saveProxyCheckSettings } from '../api'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
 import {
   BUILTIN_PROXY_IDS,
+  CHAIN_QUICK_IMPORT_TEMPLATE,
+  DIRECT_QUICK_IMPORT_TEMPLATE,
+  INITIAL_CHAIN_IMPORT_FORM,
   INITIAL_DIRECT_IMPORT_FORM,
+  buildChainImportCandidate,
   buildDirectImportCandidate,
+  buildDirectImportCandidatesFromText,
   buildImportCandidatesFromClash,
   buildImportPreview,
   buildRefreshedSourceProxies,
@@ -16,10 +21,14 @@ import {
   ensureBuiltinProxies,
   normalizeRefreshIntervalM,
   parseClashImportText,
+  parseChainImportJSON,
+  parseDirectImportText,
   parseTimestampMs,
   nextProxyID,
   resolveImportSourceID,
+  toChainImportForm,
   toDisplayList,
+  type ChainImportForm,
   type DirectImportForm,
   type ProxyDisplayInfo,
   type ProxyImportMode,
@@ -48,6 +57,12 @@ import { ProxyPoolHeader } from './proxyPool/ProxyPoolHeader'
 import { ProxyPoolTableCard } from './proxyPool/ProxyPoolTableCard'
 
 export function ProxyPoolPage() {
+  const createInitialChainImportForm = (): ChainImportForm => ({
+    ...INITIAL_CHAIN_IMPORT_FORM,
+    first: { ...INITIAL_CHAIN_IMPORT_FORM.first },
+    second: { ...INITIAL_CHAIN_IMPORT_FORM.second },
+  })
+
   const [proxies, setProxies] = useState<BrowserProxy[]>([])
   const [displayList, setDisplayList] = useState<ProxyDisplayInfo[]>([])
   const [loading, setLoading] = useState(true)
@@ -64,6 +79,10 @@ export function ProxyPoolPage() {
   const [ipHealthMap, setIPHealthMap] = useState<Record<string, ProxyIPHealthResult>>({})
   const [checkingIPHealthIds, setCheckingIPHealthIds] = useState<Set<string>>(new Set())
   const [checkingAllIPHealth, setCheckingAllIPHealth] = useState(false)
+  const [checkSettingsOpen, setCheckSettingsOpen] = useState(false)
+  const [checkSettings, setCheckSettings] = useState<ProxyCheckSettings>(() => createDefaultProxyCheckSettings())
+  const [checkTargetsText, setCheckTargetsText] = useState('')
+  const [savingCheckSettings, setSavingCheckSettings] = useState(false)
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [batchDeleteConfirmOpen, setBatchDeleteConfirmOpen] = useState(false)
@@ -76,6 +95,9 @@ export function ProxyPoolPage() {
   const [importDnsServers, setImportDnsServers] = useState('')
   const [importNamePrefix, setImportNamePrefix] = useState('')
   const [importGroupName, setImportGroupName] = useState('')
+  const [chainImportText, setChainImportText] = useState('')
+  const [directImportText, setDirectImportText] = useState('')
+  const [chainImportForm, setChainImportForm] = useState<ChainImportForm>(() => createInitialChainImportForm())
   const [directImportForm, setDirectImportForm] = useState<DirectImportForm>(() => ({ ...INITIAL_DIRECT_IMPORT_FORM }))
   const [previewModalOpen, setPreviewModalOpen] = useState(false)
   const [previewList, setPreviewList] = useState<ProxyDisplayInfo[]>([])
@@ -89,6 +111,8 @@ export function ProxyPoolPage() {
 
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [editingProxy, setEditingProxy] = useState<BrowserProxy | null>(null)
+  const [chainEditMode, setChainEditMode] = useState(false)
+  const [chainEditForm, setChainEditForm] = useState<ChainImportForm>(() => createInitialChainImportForm())
   const [editForm, setEditForm] = useState<ProxyEditFormValue>({
     proxyName: '',
     proxyConfig: '',
@@ -201,6 +225,27 @@ export function ProxyPoolPage() {
       setGroups(grps)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const openCheckSettings = async () => {
+    const settings = await fetchProxyCheckSettings()
+    setCheckSettings(settings)
+    setCheckTargetsText(JSON.stringify(settings.targets || [], null, 2))
+    setCheckSettingsOpen(true)
+  }
+
+  const saveCheckSettings = async () => {
+    setSavingCheckSettings(true)
+    try {
+      const targets = JSON.parse(checkTargetsText || '[]')
+      await saveProxyCheckSettings({ ...checkSettings, targets })
+      toast.success('检测设置已保存')
+      setCheckSettingsOpen(false)
+    } catch (error: any) {
+      toast.error(error?.message || '检测设置保存失败')
+    } finally {
+      setSavingCheckSettings(false)
     }
   }
 
@@ -347,10 +392,11 @@ export function ProxyPoolPage() {
 
   const getLatencySortTuple = (proxyId: string): [number, number] => {
     const v = latencyMap[proxyId]
-    if (v === undefined) return [4, Number.MAX_SAFE_INTEGER]
+    if (v === undefined) return [5, Number.MAX_SAFE_INTEGER]
     if (v === -1) return [1, Number.MAX_SAFE_INTEGER] // 测试中
     if (v === -2) return [2, Number.MAX_SAFE_INTEGER] // 超时
     if (v === -3) return [3, Number.MAX_SAFE_INTEGER] // 不支持
+    if (v === -4) return [4, Number.MAX_SAFE_INTEGER] // 失败
     return [0, v] // 正常延迟
   }
 
@@ -560,23 +606,73 @@ export function ProxyPoolPage() {
     setRemovedPreviewProxyNames(prev => [...prev, target.proxyName])
   }
 
+  const updateChainImportHop = (hop: 'first' | 'second', field: keyof ChainImportForm['first'], value: string) => {
+    setChainImportForm(prev => ({
+      ...prev,
+      [hop]: {
+        ...prev[hop],
+        [field]: value,
+      },
+    }))
+  }
+
+  const updateChainEditHop = (hop: 'first' | 'second', field: keyof ChainImportForm['first'], value: string) => {
+    setChainEditForm(prev => ({
+      ...prev,
+      [hop]: {
+        ...prev[hop],
+        [field]: value,
+      },
+    }))
+  }
+
   const handleEdit = (record: ProxyDisplayInfo) => {
     const proxy = proxies.find(p => p.proxyId === record.proxyId)
     if (proxy) {
       setEditingProxy(proxy)
       setEditForm({ proxyName: proxy.proxyName, proxyConfig: proxy.proxyConfig, dnsServers: proxy.dnsServers || '', groupName: proxy.groupName || '' })
+      const nextChainForm = toChainImportForm(proxy.proxyName, proxy.proxyConfig)
+      if (nextChainForm) {
+        setChainEditMode(true)
+        setChainEditForm(nextChainForm)
+      } else {
+        setChainEditMode(false)
+        setChainEditForm(createInitialChainImportForm())
+      }
       setEditModalOpen(true)
     }
   }
 
   const handleSaveProxy = async () => {
-    if (!editForm.proxyName.trim()) { toast.error('请输入代理名称'); return }
     if (!editingProxy) return
+
+    let nextProxyName = editForm.proxyName.trim()
+    let nextProxyConfig = editForm.proxyConfig
+    if (chainEditMode) {
+      try {
+        const candidate = buildChainImportCandidate(chainEditForm)
+        nextProxyName = candidate.proxyName
+        nextProxyConfig = candidate.proxyConfig
+      } catch (error: any) {
+        toast.error(error?.message || '链式代理配置无效')
+        return
+      }
+    } else if (!nextProxyName) {
+      toast.error('请输入代理名称')
+      return
+    }
+
     setSaving(true)
     try {
       const newProxies = proxies.map(p =>
         p.proxyId === editingProxy.proxyId
-          ? { ...p, proxyName: editForm.proxyName, proxyConfig: editForm.proxyConfig, dnsServers: editForm.dnsServers, groupName: editForm.groupName }
+          ? {
+            ...p,
+            proxyName: nextProxyName,
+            proxyConfig: nextProxyConfig,
+            dnsServers: editForm.dnsServers.trim() || undefined,
+            groupName: editForm.groupName.trim() || undefined,
+          }
           : p
       )
       await saveProxies(newProxies)
@@ -613,6 +709,63 @@ export function ProxyPoolPage() {
     if (nextMode !== 'clash') {
       setImportUrl('')
       setImportDnsServers('')
+    }
+  }
+
+  const handleFillChainTemplate = () => {
+    setChainImportText(CHAIN_QUICK_IMPORT_TEMPLATE)
+  }
+
+  const handleFillDirectTemplate = () => {
+    setDirectImportText(DIRECT_QUICK_IMPORT_TEMPLATE)
+  }
+
+  const handleCopyChainTemplate = async () => {
+    try {
+      if (!navigator?.clipboard?.writeText) {
+        throw new Error('当前环境不支持剪贴板')
+      }
+      await navigator.clipboard.writeText(CHAIN_QUICK_IMPORT_TEMPLATE)
+      toast.success('JSON 模板已复制')
+    } catch (error: any) {
+      toast.error(error?.message || '复制模板失败')
+    }
+  }
+
+  const handleCopyDirectTemplate = async () => {
+    try {
+      if (!navigator?.clipboard?.writeText) {
+        throw new Error('当前环境不支持剪贴板')
+      }
+      await navigator.clipboard.writeText(DIRECT_QUICK_IMPORT_TEMPLATE)
+      toast.success('JSON 模板已复制')
+    } catch (error: any) {
+      toast.error(error?.message || '复制模板失败')
+    }
+  }
+
+  const handleApplyChainJSON = () => {
+    try {
+      const { form, groupName } = parseChainImportJSON(chainImportText)
+      setChainImportForm(form)
+      setImportGroupName(groupName)
+      toast.success('JSON 已应用')
+    } catch (error: any) {
+      toast.error(error?.message || 'JSON 应用失败')
+    }
+  }
+
+  const handleApplyDirectText = () => {
+    try {
+      const { form, groupName } = parseDirectImportText(directImportText)
+      setDirectImportForm(form)
+      if (groupName) {
+        setImportGroupName(groupName)
+      }
+      setDirectImportText('')
+      toast.success('文本已应用')
+    } catch (error: any) {
+      toast.error(error?.message || '文本应用失败')
     }
   }
 
@@ -660,14 +813,28 @@ export function ProxyPoolPage() {
   const handleParseImport = () => {
     try {
       const prefix = importNamePrefix.trim()
-      const candidates = importMode === 'clash'
-        ? buildImportCandidatesFromClash(parseClashImportText(importText), prefix)
-        : [buildDirectImportCandidate(directImportForm)]
+      let candidates
+      let previewGroupName = importGroupName.trim()
+      if (importMode === 'clash') {
+        candidates = buildImportCandidatesFromClash(parseClashImportText(importText), prefix)
+      } else if (importMode === 'direct') {
+        if (directImportText.trim()) {
+          const parsed = buildDirectImportCandidatesFromText(directImportText)
+          candidates = parsed.candidates
+          if (!previewGroupName) {
+            previewGroupName = parsed.defaultGroupName
+          }
+        } else {
+          candidates = [buildDirectImportCandidate(directImportForm)]
+        }
+      } else {
+        candidates = [buildChainImportCandidate(chainImportForm)]
+      }
       if (!candidates.length) {
         toast.error('未解析到可导入代理')
         return
       }
-      const preview = buildImportPreview(candidates, importGroupName.trim())
+      const preview = buildImportPreview(candidates, previewGroupName)
       setRemovedPreviewProxyNames([])
       setPreviewList(preview)
       setImportModalOpen(false)
@@ -701,7 +868,7 @@ export function ProxyPoolPage() {
         proxyName: p.proxyName,
         proxyConfig: p.proxyConfig,
         dnsServers: importMode === 'clash' ? importDnsServers.trim() || undefined : undefined,
-        groupName: importGroupName.trim() || undefined,
+        groupName: p.groupName.trim() || undefined,
         sourceId: sourceID || undefined,
         sourceUrl: sourceURL || undefined,
         sourceNamePrefix: sourceNamePrefix || undefined,
@@ -723,6 +890,9 @@ export function ProxyPoolPage() {
       setImportDnsServers('')
       setImportNamePrefix('')
       setImportGroupName('')
+      setChainImportText('')
+      setDirectImportText('')
+      setChainImportForm(createInitialChainImportForm())
       setDirectImportForm({ ...INITIAL_DIRECT_IMPORT_FORM })
       setPreviewList([])
       setRemovedPreviewProxyNames([])
@@ -737,7 +907,12 @@ export function ProxyPoolPage() {
   const selectedCount = selectedIds.size
   const canParseImport = importMode === 'clash'
     ? !!importText.trim()
-    : !!directImportForm.server.trim() && !!directImportForm.port.trim()
+    : importMode === 'direct'
+      ? !!directImportText.trim() || (!!directImportForm.server.trim() && !!directImportForm.port.trim())
+      : !!chainImportForm.first.server.trim()
+        && !!chainImportForm.first.port.trim()
+        && !!chainImportForm.second.server.trim()
+        && !!chainImportForm.second.port.trim()
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -745,6 +920,7 @@ export function ProxyPoolPage() {
         checkingAllIPHealth={checkingAllIPHealth}
         hasURLImportSources={hasURLImportSources}
         onCheckAllIPHealth={handleCheckAllIPHealth}
+        onOpenSettings={() => void openCheckSettings()}
         onOpenImport={() => setImportModalOpen(true)}
         onRefreshAllSources={() => void handleRefreshAllSources(false)}
         onTestAll={() => void handleTestAll()}
@@ -809,6 +985,9 @@ export function ProxyPoolPage() {
         importDnsServers={importDnsServers}
         importNamePrefix={importNamePrefix}
         importGroupName={importGroupName}
+        chainImportText={chainImportText}
+        directImportText={directImportText}
+        chainImportForm={chainImportForm}
         directImportForm={directImportForm}
         fetchingImportUrl={fetchingImportUrl}
         canParseImport={canParseImport}
@@ -821,6 +1000,16 @@ export function ProxyPoolPage() {
         onImportDnsServersChange={setImportDnsServers}
         onImportNamePrefixChange={setImportNamePrefix}
         onImportGroupNameChange={setImportGroupName}
+        onChainImportTextChange={setChainImportText}
+        onDirectImportTextChange={setDirectImportText}
+        onApplyChainJSON={handleApplyChainJSON}
+        onApplyDirectText={handleApplyDirectText}
+        onChainImportFormChange={(patch) => setChainImportForm((prev) => ({ ...prev, ...patch }))}
+        onChainImportHopChange={updateChainImportHop}
+        onFillChainTemplate={handleFillChainTemplate}
+        onCopyChainTemplate={() => void handleCopyChainTemplate()}
+        onFillDirectTemplate={handleFillDirectTemplate}
+        onCopyDirectTemplate={() => void handleCopyDirectTemplate()}
         onDirectImportFormChange={(patch) => setDirectImportForm((prev) => ({ ...prev, ...patch }))}
       />
 
@@ -845,9 +1034,13 @@ export function ProxyPoolPage() {
         saving={saving}
         groups={groups}
         editForm={editForm}
+        chainEditMode={chainEditMode}
+        chainEditForm={chainEditForm}
         onClose={() => setEditModalOpen(false)}
         onSave={handleSaveProxy}
         onChange={(patch) => setEditForm((prev) => ({ ...prev, ...patch }))}
+        onChainEditFormChange={(patch) => setChainEditForm((prev) => ({ ...prev, ...patch }))}
+        onChainEditHopChange={updateChainEditHop}
       />
 
       <ProxyPoolIPHealthDetailModal
@@ -855,6 +1048,48 @@ export function ProxyPoolPage() {
         detail={currentIPHealthDetail}
         onClose={() => setIPHealthDetailOpen(false)}
       />
+
+      <Modal
+        open={checkSettingsOpen}
+        onClose={() => setCheckSettingsOpen(false)}
+        title="检测设置"
+        width="760px"
+        footer={(
+          <>
+            <Button variant="secondary" onClick={() => setCheckSettingsOpen(false)}>取消</Button>
+            <Button onClick={saveCheckSettings} loading={savingCheckSettings}>保存</Button>
+          </>
+        )}
+      >
+        <div className="space-y-4">
+          <FormItem label="桥接启动等待" hint="毫秒" >
+            <Input
+              type="number"
+              value={checkSettings.bridgeStartTimeoutMs}
+              onChange={(e) => setCheckSettings(prev => ({ ...prev, bridgeStartTimeoutMs: Number(e.target.value) || 15000 }))}
+            />
+          </FormItem>
+          <FormItem label="测速目标 ID">
+            <Input
+              value={checkSettings.speedTargetId}
+              onChange={(e) => setCheckSettings(prev => ({ ...prev, speedTargetId: e.target.value }))}
+            />
+          </FormItem>
+          <FormItem label="IP 健康目标 ID">
+            <Input
+              value={checkSettings.ipHealthTargetId}
+              onChange={(e) => setCheckSettings(prev => ({ ...prev, ipHealthTargetId: e.target.value }))}
+            />
+          </FormItem>
+          <FormItem label="检测目标列表（JSON，每项一个）" hint="可直接编辑 URL、超时、期望状态码">
+            <Textarea
+              value={checkTargetsText}
+              onChange={(e) => setCheckTargetsText(e.target.value)}
+              rows={14}
+            />
+          </FormItem>
+        </div>
+      </Modal>
 
       <ConfirmModal open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)} onConfirm={handleDeleteConfirm}
         title="确认删除" content="确定要删除这个代理吗？此操作不可恢复。" confirmText="删除" danger />

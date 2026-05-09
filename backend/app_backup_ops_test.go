@@ -24,7 +24,7 @@ func TestBackupMergeConfigDedup(t *testing.T) {
 		{Name: "Google", URL: "https://www.google.com/"},
 	}
 	current.Browser.Proxies = []config.BrowserProxy{
-		{ProxyId: "p1", ProxyName: "P1", ProxyConfig: "http://127.0.0.1:7890"},
+		{ProxyId: "p1", ProxyName: "P1", ProxyConfig: "http://proxy.invalid:8080"},
 	}
 	current.Browser.Cores = []config.BrowserCore{
 		{CoreId: "c1", CoreName: "C1", CorePath: "chrome/c1"},
@@ -40,7 +40,7 @@ func TestBackupMergeConfigDedup(t *testing.T) {
 		{Name: "ChatGPT", URL: "https://chatgpt.com/"},
 	}
 	incoming.Browser.Proxies = []config.BrowserProxy{
-		{ProxyId: "p1", ProxyName: "P1 Dup", ProxyConfig: "http://127.0.0.1:7890"},
+		{ProxyId: "p1", ProxyName: "P1 Dup", ProxyConfig: "http://proxy.invalid:8080"},
 		{ProxyId: "p2", ProxyName: "P2", ProxyConfig: "socks5://127.0.0.1:1080"},
 	}
 	incoming.Browser.Cores = []config.BrowserCore{

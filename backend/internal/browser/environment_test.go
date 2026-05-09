@@ -53,7 +53,7 @@ func TestGetProxyConfigByIdPreferDAO(t *testing.T) {
 func TestGetProxyConfigByIdFallbackToConfig(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.Browser.Proxies = []config.BrowserProxy{
-		{ProxyId: "pool-2", ProxyConfig: "http://127.0.0.1:7890"},
+		{ProxyId: "pool-2", ProxyConfig: "http://proxy.invalid:8080"},
 	}
 
 	mgr := NewManager(cfg, "")
@@ -63,7 +63,7 @@ func TestGetProxyConfigByIdFallbackToConfig(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected proxy to be found in config fallback")
 	}
-	if got != "http://127.0.0.1:7890" {
+	if got != "http://proxy.invalid:8080" {
 		t.Fatalf("unexpected proxy config: %q", got)
 	}
 }

@@ -440,10 +440,17 @@ export const STRUCTURED_API_ENDPOINT_DOCS: StructuredApiEndpointDoc[] = [
     label: '按 selector 启动',
     method: 'POST',
     path: '/api/launch',
-    purpose: '按 selector 和启动参数启动实例。',
-    description: '更灵活的启动入口，支持 selector、launchArgs、startUrls 和 skipDefaultStartUrls 等临时参数。',
+    purpose: '按 selector 或兼容顶层字段启动实例。',
+    description: '更灵活的启动入口，支持 selector、兼容顶层选择字段、launchArgs、startUrls 和 skipDefaultStartUrls 等临时参数。',
     fields: [
-      { name: 'selector', type: 'object', required: true, location: 'Body', description: '目标实例选择条件。' },
+      { name: 'selector', type: 'object', required: false, location: 'Body', description: '目标实例选择条件；新接入推荐使用。' },
+      { name: 'code', type: 'string', required: false, location: 'Body', description: '兼容写法：等价于 selector.code。' },
+      { name: 'profileId', type: 'string', required: false, location: 'Body', description: '兼容写法：等价于 selector.profileId。' },
+      { name: 'profileName', type: 'string', required: false, location: 'Body', description: '兼容写法：等价于 selector.profileName。' },
+      { name: 'keyword / keywords', type: 'string / string[]', required: false, location: 'Body', description: '兼容写法：等价于 selector.keyword / selector.keywords。' },
+      { name: 'tag / tags', type: 'string / string[]', required: false, location: 'Body', description: '兼容写法：等价于 selector.tag / selector.tags。' },
+      { name: 'groupId', type: 'string', required: false, location: 'Body', description: '兼容写法：等价于 selector.groupId。' },
+      { name: 'matchMode', type: 'unique | first | all', required: false, location: 'Body', description: '兼容写法：等价于 selector.matchMode。' },
       { name: 'launchArgs', type: 'string[]', required: false, location: 'Body', description: '本次启动的临时附加参数。' },
       { name: 'startUrls', type: 'string[]', required: false, location: 'Body', description: '本次启动后额外打开的网址。' },
       { name: 'skipDefaultStartUrls', type: 'boolean', required: false, location: 'Body', description: '是否跳过实例默认启动 URL。' },
@@ -479,6 +486,7 @@ export const STRUCTURED_API_ENDPOINT_DOCS: StructuredApiEndpointDoc[] = [
       { code: '409', description: 'selector 命中多个实例。' },
     ],
     notes: [
+      'selector 为空且没有任何兼容顶层选择字段时返回 400。',
       'matchMode=all 只在这个接口可用。',
     ],
   },
@@ -526,7 +534,14 @@ export const STRUCTURED_API_ENDPOINT_DOCS: StructuredApiEndpointDoc[] = [
     purpose: '准备一个可 attach 的运行时会话。',
     description: '按 selector 命中实例，必要时自动启动，并在给定超时时间内等待 debugReady=true。',
     fields: [
-      { name: 'selector', type: 'object', required: true, location: 'Body', description: '目标实例选择条件。' },
+      { name: 'selector', type: 'object', required: false, location: 'Body', description: '目标实例选择条件；新接入推荐使用。' },
+      { name: 'code', type: 'string', required: false, location: 'Body', description: '兼容写法：等价于 selector.code。' },
+      { name: 'profileId', type: 'string', required: false, location: 'Body', description: '兼容写法：等价于 selector.profileId。' },
+      { name: 'profileName', type: 'string', required: false, location: 'Body', description: '兼容写法：等价于 selector.profileName。' },
+      { name: 'keyword / keywords', type: 'string / string[]', required: false, location: 'Body', description: '兼容写法：等价于 selector.keyword / selector.keywords。' },
+      { name: 'tag / tags', type: 'string / string[]', required: false, location: 'Body', description: '兼容写法：等价于 selector.tag / selector.tags。' },
+      { name: 'groupId', type: 'string', required: false, location: 'Body', description: '兼容写法：等价于 selector.groupId。' },
+      { name: 'matchMode', type: 'unique | first', required: false, location: 'Body', description: '兼容写法：等价于 selector.matchMode。' },
       { name: 'timeoutMs', type: 'integer', required: false, location: 'Body', description: '等待 debugReady 的超时时间。' },
       { name: 'startUrls', type: 'string[]', required: false, location: 'Body', description: '本次启动时额外打开的网址。' },
       { name: 'skipDefaultStartUrls', type: 'boolean', required: false, location: 'Body', description: '是否跳过实例默认启动 URL。' },
@@ -567,6 +582,7 @@ export const STRUCTURED_API_ENDPOINT_DOCS: StructuredApiEndpointDoc[] = [
       { code: '404', description: '目标实例不存在。' },
     ],
     notes: [
+      'selector 为空且没有任何兼容顶层选择字段时返回 400。',
       '200 表示 ready，可直接接管。',
       '202 表示未 ready，需要重试。',
     ],
@@ -580,7 +596,11 @@ export const STRUCTURED_API_ENDPOINT_DOCS: StructuredApiEndpointDoc[] = [
     purpose: '按 selector 查询实例当前运行态。',
     description: '不启动新实例，不等待 ready，只看当前 selector 命中的实例状态。',
     fields: [
-      { name: 'selector', type: 'object', required: true, location: 'Body', description: '目标实例选择条件。' },
+      { name: 'selector', type: 'object', required: false, location: 'Body', description: '目标实例选择条件；新接入推荐使用。' },
+      { name: 'code / profileId / profileName', type: 'string', required: false, location: 'Body', description: '兼容顶层选择字段。' },
+      { name: 'keyword / keywords', type: 'string / string[]', required: false, location: 'Body', description: '兼容顶层选择字段。' },
+      { name: 'tag / tags / groupId', type: 'string / string[]', required: false, location: 'Body', description: '兼容顶层选择字段。' },
+      { name: 'matchMode', type: 'unique | first', required: false, location: 'Body', description: '运行态控制不支持 all。' },
     ],
     requestExample: {
       language: 'bash',
@@ -610,6 +630,7 @@ export const STRUCTURED_API_ENDPOINT_DOCS: StructuredApiEndpointDoc[] = [
     ],
     notes: [
       '不会启动实例。',
+      'selector 为空且没有任何兼容顶层选择字段时返回 400。',
     ],
   },
   {
@@ -621,7 +642,11 @@ export const STRUCTURED_API_ENDPOINT_DOCS: StructuredApiEndpointDoc[] = [
     purpose: '按 selector 停止实例。',
     description: '和 runtime/status 一样使用 selector，但动作改为停止实例，适合编排侧做统一回收。',
     fields: [
-      { name: 'selector', type: 'object', required: true, location: 'Body', description: '目标实例选择条件。' },
+      { name: 'selector', type: 'object', required: false, location: 'Body', description: '目标实例选择条件；新接入推荐使用。' },
+      { name: 'code / profileId / profileName', type: 'string', required: false, location: 'Body', description: '兼容顶层选择字段。' },
+      { name: 'keyword / keywords', type: 'string / string[]', required: false, location: 'Body', description: '兼容顶层选择字段。' },
+      { name: 'tag / tags / groupId', type: 'string / string[]', required: false, location: 'Body', description: '兼容顶层选择字段。' },
+      { name: 'matchMode', type: 'unique | first', required: false, location: 'Body', description: '运行态控制不支持 all。' },
     ],
     requestExample: {
       language: 'bash',
@@ -650,6 +675,7 @@ export const STRUCTURED_API_ENDPOINT_DOCS: StructuredApiEndpointDoc[] = [
       { code: '404', description: '目标实例不存在。' },
     ],
     notes: [
+      'selector 为空且没有任何兼容顶层选择字段时返回 400。',
       '不支持 matchMode=all。',
     ],
   },
@@ -670,7 +696,7 @@ export const STRUCTURED_API_ENDPOINT_DOCS: StructuredApiEndpointDoc[] = [
     responseExample: {
       language: 'json',
       code: () => `{
-  "Browser": "Chrome/142.0.0.0",
+  "Browser": "Chrome/<version>",
   "Protocol-Version": "1.3",
   "User-Agent": "Mozilla/5.0",
   "webSocketDebuggerUrl": "ws://127.0.0.1:19876/devtools/browser/active"
@@ -848,6 +874,7 @@ export const STRUCTURED_API_ENDPOINT_DOCS: StructuredApiEndpointDoc[] = [
       { name: 'params', type: 'object', required: false, location: 'Body', description: '覆盖脚本默认 params。' },
       { name: 'useScriptSelector', type: 'boolean', required: false, location: 'Body', description: '显式指定是否沿用脚本默认 selector。' },
       { name: 'useScriptParams', type: 'boolean', required: false, location: 'Body', description: '显式指定是否沿用脚本默认 params。' },
+      { name: 'timeoutMs', type: 'integer', required: false, location: 'Body', description: '本次脚本执行超时时间。' },
     ],
     requestExample: {
       language: 'bash',

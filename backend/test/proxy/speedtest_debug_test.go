@@ -10,7 +10,7 @@ import (
 )
 
 // 模拟数据库中实际存储的 Clash YAML 格式代理配置
-var testTrojanConfig = `- name: HK01|香港|x1.0
+var testTrojanConfig = `- name: Node01
   type: trojan
   server: trojan.example.com
   port: 443
@@ -21,7 +21,7 @@ var testTrojanConfig = `- name: HK01|香港|x1.0
 
 var testVmessConfig = `- name: DE-Vmess(NL1) 1x
   type: vmess
-  server: 203.0.113.55
+  server: proxy.invalid
   port: 443
   uuid: 11111111-1111-4111-8111-111111111111
   alterId: 0
@@ -56,7 +56,7 @@ func TestProtocolDetection(t *testing.T) {
 		{"vmess-clash", testVmessConfig},
 		{"hysteria2-clash", testHysteria2Config},
 		{"socks5-direct", "socks5://127.0.0.1:1080"},
-		{"http-direct", "http://127.0.0.1:7890"},
+		{"http-direct", "http://proxy.invalid:8080"},
 	}
 
 	for _, tt := range tests {
@@ -96,7 +96,7 @@ func TestSpeedTestWithMockProxies(t *testing.T) {
 		{ProxyId: "test-trojan", ProxyName: "测试trojan", ProxyConfig: testTrojanConfig},
 		{ProxyId: "test-vmess", ProxyName: "测试vmess", ProxyConfig: testVmessConfig},
 		{ProxyId: "test-hysteria2", ProxyName: "测试hysteria2", ProxyConfig: testHysteria2Config},
-		{ProxyId: "test-http", ProxyName: "测试http", ProxyConfig: "http://127.0.0.1:7890"},
+		{ProxyId: "test-http", ProxyName: "测试http", ProxyConfig: "http://proxy.invalid:8080"},
 	}
 
 	for _, p := range proxies {

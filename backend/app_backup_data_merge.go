@@ -195,6 +195,25 @@ WHERE NOT EXISTS (
 		if !resetFirst {
 			sqlText = item.insertSafe
 		}
+		if item.name == "browser_bookmarks" {
+			hasOpenOnStart, err := backupSrcColumnExists(tx, item.name, "open_on_start")
+			if err != nil {
+				return err
+			}
+			if hasOpenOnStart {
+				if resetFirst {
+					sqlText = `INSERT INTO browser_bookmarks (name, url, open_on_start, sort_order)
+SELECT name, url, COALESCE(open_on_start,0), sort_order FROM src.browser_bookmarks`
+				} else {
+					sqlText = `INSERT INTO browser_bookmarks (name, url, open_on_start, sort_order)
+SELECT s.name, s.url, COALESCE(s.open_on_start,0), s.sort_order
+FROM src.browser_bookmarks s
+WHERE NOT EXISTS (
+  SELECT 1 FROM browser_bookmarks t WHERE lower(t.url) = lower(s.url)
+)`
+				}
+			}
+		}
 		res, err := tx.Exec(sqlText)
 		if err != nil {
 			return fmt.Errorf("导入数据表失败(%s): %w", item.name, err)

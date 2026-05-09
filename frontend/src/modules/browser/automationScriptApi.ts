@@ -107,6 +107,7 @@ function normalizeAutomationScriptRunInput(
       paramsText: "",
       useScriptSelector: true,
       useScriptParams: true,
+      timeoutMs: 0,
       launchCode: "",
       startByCodeBeforeRun: false,
     };
@@ -118,6 +119,9 @@ function normalizeAutomationScriptRunInput(
     paramsText: String(input?.paramsText || ""),
     useScriptSelector: input?.useScriptSelector !== false,
     useScriptParams: input?.useScriptParams !== false,
+    timeoutMs: Number.isFinite(Number(input?.timeoutMs))
+      ? Math.round(Number(input?.timeoutMs))
+      : 0,
     launchCode: String(input?.launchCode || "")
       .trim()
       .toUpperCase(),

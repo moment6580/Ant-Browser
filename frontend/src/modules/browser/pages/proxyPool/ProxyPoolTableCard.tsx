@@ -94,6 +94,7 @@ export function ProxyPoolTableCard({
     if (value === -1) return <span className="text-[var(--color-text-muted)] text-xs animate-pulse">测试中...</span>
     if (value === -2) return <span className="text-red-500 text-xs">超时</span>
     if (value === -3) return <span className="text-gray-400 text-xs">不支持</span>
+    if (value === -4) return <span className="text-red-500 text-xs">失败</span>
     const color = value < 200 ? 'text-green-500' : value < 500 ? 'text-yellow-500' : 'text-red-500'
     return <span className={`text-xs font-medium ${color}`}>{value} ms</span>
   }
@@ -184,7 +185,14 @@ export function ProxyPoolTableCard({
     },
     {
       key: 'ipHealth',
-      title: 'IP健康',
+      title: (
+        <div className="leading-tight">
+          <div>IP健康</div>
+          <div className="mt-0.5 text-[10px] font-normal text-[var(--color-text-muted)]">
+            仅供参考
+          </div>
+        </div>
+      ),
       width: '280px',
       render: (_, record) => renderIPHealth(record),
     },

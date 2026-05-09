@@ -3,7 +3,14 @@
 
 package automation
 
-import "os/exec"
+import (
+	"os/exec"
+	"syscall"
+)
 
 func hideWindow(cmd *exec.Cmd) {
+}
+
+func prepareTaskCommand(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 }

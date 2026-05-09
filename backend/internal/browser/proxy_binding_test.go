@@ -12,7 +12,7 @@ func TestResolveProfileProxyBindingBySourceAndName(t *testing.T) {
 		list: []Proxy{
 			{
 				ProxyId:     "new-p1",
-				ProxyName:   "香港-01",
+				ProxyName:   "节点-01",
 				ProxyConfig: "socks5://127.0.0.1:1080",
 				SourceID:    "src-hk",
 				SourceURL:   "https://example.com/sub",
@@ -25,7 +25,7 @@ func TestResolveProfileProxyBindingBySourceAndName(t *testing.T) {
 		ProxyId:           "old-missing-id",
 		ProxyConfig:       "socks5://127.0.0.1:2080",
 		ProxyBindSourceID: "src-hk",
-		ProxyBindName:     "香港-01",
+		ProxyBindName:     "节点-01",
 	}
 
 	changed, boundInPool, mode := mgr.ResolveProfileProxyBinding(profile)

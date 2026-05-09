@@ -25,6 +25,7 @@ import {
   saveBrowserSettings,
   setDefaultBrowserCore,
   startBrowserInstance,
+  startBrowserInstanceDirect,
   stopBrowserInstance,
   validateBrowserCorePath,
   validateProxyConfig,
@@ -417,6 +418,34 @@ export function BrowserListPage() {
     }
   }
 
+  const handleStartDirect = async (profileId: string) => {
+    updatePendingIds(setStartingIds, profileId, true)
+    try {
+      const startedProfile = await startBrowserInstanceDirect(profileId)
+      mergeProfileState(startedProfile)
+      setProxyErrorModal(false)
+      setPendingStartId(null)
+      if (startedProfile?.running && !startedProfile.debugReady && startedProfile.runtimeWarning) {
+        toast.warning(startedProfile.runtimeWarning)
+      } else {
+        toast.success(`实例已直连启动${startedProfile?.profileName ? `：${startedProfile.profileName}` : ''}`)
+      }
+      await loadProfiles({ silent: true, syncRuntimeState: true })
+    } catch (error: any) {
+      setProxyErrorModal(false)
+      setPendingStartId(null)
+      const feedback = resolveActionFeedback(error, '实例直连启动失败')
+      if (feedback.tone === 'warning') {
+        toast.warning(feedback.message)
+      } else {
+        toast.error(feedback.message)
+      }
+      await loadProfiles({ silent: true, syncRuntimeState: true })
+    } finally {
+      updatePendingIds(setStartingIds, profileId, false)
+    }
+  }
+
   const handleStop = async (profileId: string) => {
     updatePendingIds(setStoppingIds, profileId, true)
     try {
@@ -792,6 +821,12 @@ export function BrowserListPage() {
           setProxyErrorModal(false)
           setPendingStartId(null)
         }}
+        onStartDirect={() => {
+          if (pendingStartId) {
+            void handleStartDirect(pendingStartId)
+          }
+        }}
+        startingDirect={pendingStartId ? startingIds.has(pendingStartId) : false}
         kwModal={kwModal}
         onCloseKeywords={closeKwModal}
         onKeywordsSaved={(keywords) => {

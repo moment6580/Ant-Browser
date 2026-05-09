@@ -42,14 +42,19 @@ func EnsureDefaultBookmarks(userDataDir string, bookmarks []config.BrowserBookma
 		root = newEmptyBookmarkRoot(now)
 	}
 
-	// 取出 bookmark_bar children，收集已有 URL 集合
-	barChildren, existingURLs := extractBarChildren(root)
+	// 取出 bookmark_bar children，按整个书签树收集已有 URL 集合
+	barChildren := extractBarChildren(root)
+	existingURLs := collectRootURLs(root)
 
 	// 计算当前最大 id，用于分配新 id
 	maxID := findMaxID(root)
 
 	// 把不存在的默认书签追加进去
+	added := false
 	for _, b := range bookmarks {
+		if b.Name == "" || b.URL == "" {
+			continue
+		}
 		if existingURLs[b.URL] {
 			continue
 		}
@@ -64,6 +69,12 @@ func EnsureDefaultBookmarks(userDataDir string, bookmarks []config.BrowserBookma
 			"type":           "url",
 			"url":            b.URL,
 		})
+		existingURLs[b.URL] = true
+		added = true
+	}
+
+	if !added {
+		return nil
 	}
 
 	// 写回
@@ -121,9 +132,8 @@ func newEmptyBookmarkRoot(now string) map[string]interface{} {
 	}
 }
 
-// extractBarChildren 从根结构中提取书签栏 children 和已有 URL 集合
-func extractBarChildren(root map[string]interface{}) ([]interface{}, map[string]bool) {
-	existing := map[string]bool{}
+// extractBarChildren 从根结构中提取书签栏 children
+func extractBarChildren(root map[string]interface{}) []interface{} {
 	var children []interface{}
 
 	roots, ok := root["roots"].(map[string]interface{})
@@ -135,7 +145,7 @@ func extractBarChildren(root map[string]interface{}) ([]interface{}, map[string]
 				"name":     "书签栏",
 			},
 		}
-		return children, existing
+		return children
 	}
 
 	bar, ok := roots["bookmark_bar"].(map[string]interface{})
@@ -146,14 +156,31 @@ func extractBarChildren(root map[string]interface{}) ([]interface{}, map[string]
 			"name":     "书签栏",
 		}
 		root["roots"] = roots
-		return children, existing
+		return children
 	}
 
 	if c, ok := bar["children"].([]interface{}); ok {
 		children = c
-		collectURLs(c, existing)
 	}
-	return children, existing
+	return children
+}
+
+func collectRootURLs(root map[string]interface{}) map[string]bool {
+	existing := map[string]bool{}
+	roots, ok := root["roots"].(map[string]interface{})
+	if !ok {
+		return existing
+	}
+	for _, item := range roots {
+		folder, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if children, ok := folder["children"].([]interface{}); ok {
+			collectURLs(children, existing)
+		}
+	}
+	return existing
 }
 
 // collectURLs 递归收集所有书签 URL

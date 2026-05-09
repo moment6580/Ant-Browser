@@ -9,6 +9,8 @@ interface BrowserListDialogsProps {
   pendingStartId: string | null
   proxyErrorMsg: string
   onCloseProxyError: () => void
+  onStartDirect: () => void
+  startingDirect: boolean
   kwModal: { open: boolean; profile: BrowserProfile | null }
   onCloseKeywords: () => void
   onKeywordsSaved: (keywords: string[]) => void
@@ -36,6 +38,8 @@ export function BrowserListDialogs({
   pendingStartId,
   proxyErrorMsg,
   onCloseProxyError,
+  onStartDirect,
+  startingDirect,
   kwModal,
   onCloseKeywords,
   onKeywordsSaved,
@@ -66,10 +70,15 @@ export function BrowserListDialogs({
         width="420px"
         footer={
           <>
-            <Button variant="secondary" onClick={onCloseProxyError}>取消</Button>
+            <Button variant="secondary" onClick={onCloseProxyError} disabled={startingDirect}>取消</Button>
+            {pendingStartId && (
+              <Button variant="secondary" onClick={onStartDirect} loading={startingDirect}>
+                直连启动
+              </Button>
+            )}
             {pendingStartId && (
               <Link to={`/browser/edit/${pendingStartId}`}>
-                <Button onClick={onCloseProxyError}>去修改代理</Button>
+                <Button onClick={onCloseProxyError} disabled={startingDirect}>去修改代理</Button>
               </Link>
             )}
           </>

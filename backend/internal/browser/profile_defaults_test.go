@@ -11,7 +11,7 @@ func TestApplyDefaultsDoesNotFallbackToDirectAfterPoolBindByProxyConfig(t *testi
 	mgr.ProxyDAO = &proxyDAOStub{
 		list: []Proxy{
 			{ProxyId: directProxyID, ProxyName: "直连（不走代理）", ProxyConfig: "direct://"},
-			{ProxyId: "pool-1", ProxyName: "香港-01", ProxyConfig: "socks5://127.0.0.1:1080"},
+			{ProxyId: "pool-1", ProxyName: "节点-01", ProxyConfig: "socks5://127.0.0.1:1080"},
 		},
 	}
 

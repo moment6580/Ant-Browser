@@ -7,22 +7,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
 // EnsureBridge 确保 sing-box 桥接进程运行，返回 socks5://127.0.0.1:port
 func (m *SingBoxManager) EnsureBridge(proxyConfig string, proxies []config.BrowserProxy, proxyId string) (string, error) {
 	log := logger.New("SingBox")
-	src := strings.TrimSpace(proxyConfig)
-	if proxyId != "" {
-		for _, item := range proxies {
-			if strings.EqualFold(item.ProxyId, proxyId) {
-				src = strings.TrimSpace(item.ProxyConfig)
-				break
-			}
-		}
-	}
+	src := resolveProxyConfig(proxyConfig, proxies, proxyId)
 	if src == "" {
 		return "", fmt.Errorf("未找到代理节点")
 	}

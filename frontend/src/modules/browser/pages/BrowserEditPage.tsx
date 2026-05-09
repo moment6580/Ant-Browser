@@ -183,6 +183,25 @@ export function BrowserEditPage() {
     }
   }
 
+  const handleProxyListUpdated = (nextProxies: BrowserProxy[]) => {
+    setProxies(nextProxies)
+  }
+
+  const handleProxyDeleted = (deletedProxyId: string, nextProxies: BrowserProxy[]) => {
+    setProxies(nextProxies)
+    if (formData.proxyId !== deletedProxyId) {
+      return
+    }
+
+    const fallbackProxy = nextProxies.find((proxy) => proxy.proxyId === directProxyID)
+    if (fallbackProxy) {
+      handleChange('proxyId', fallbackProxy.proxyId)
+      return
+    }
+
+    handleChange('proxyId', '')
+  }
+
   return (
     <div className="space-y-5 animate-fade-in">
       <div className="flex items-center justify-between">
@@ -281,6 +300,8 @@ export function BrowserEditPage() {
         open={proxyPickerOpen}
         currentProxyId={formData.proxyId}
         onSelect={proxy => handleChange('proxyId', proxy.proxyId)}
+        onProxyListUpdated={handleProxyListUpdated}
+        onProxyDeleted={handleProxyDeleted}
         onClose={() => setProxyPickerOpen(false)}
       />
 

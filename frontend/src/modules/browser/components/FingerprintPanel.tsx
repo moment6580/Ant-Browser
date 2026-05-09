@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { ChevronDown, ChevronUp, RefreshCw, Wand2 } from 'lucide-react'
 import { ConfirmModal, FormItem, Input, Select, Textarea } from '../../../shared/components'
 import {
@@ -60,7 +60,7 @@ const TIMEZONE_OPTIONS = [
   { value: 'America/Denver', label: 'America/Denver (UTC-7)' },
   { value: 'America/Toronto', label: 'America/Toronto (UTC-5)' },
   { value: 'America/Sao_Paulo', label: 'America/Sao_Paulo (UTC-3)' },
-  // 欧洲
+  // EMEA
   { value: 'Europe/London', label: 'Europe/London (UTC+0)' },
   { value: 'Europe/Paris', label: 'Europe/Paris (UTC+1)' },
   { value: 'Europe/Berlin', label: 'Europe/Berlin (UTC+1)' },

@@ -178,6 +178,7 @@ export namespace automation {
 	    paramsText: string;
 	    useScriptSelector: boolean;
 	    useScriptParams: boolean;
+	    timeoutMs?: number;
 
 	    static createFrom(source: any = {}) {
 	        return new ScriptRunRequest(source);
@@ -190,6 +191,7 @@ export namespace automation {
 	        this.paramsText = source["paramsText"];
 	        this.useScriptSelector = source["useScriptSelector"];
 	        this.useScriptParams = source["useScriptParams"];
+	        this.timeoutMs = source["timeoutMs"];
 	    }
 	}
 
@@ -199,6 +201,28 @@ export namespace automation {
 
 export namespace backend {
 
+	export class BookmarkSyncResult {
+	    total: number;
+	    synced: number;
+	    skipped: number;
+	    failed: number;
+	    skippedList: string[];
+	    failedList: string[];
+
+	    static createFrom(source: any = {}) {
+	        return new BookmarkSyncResult(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.total = source["total"];
+	        this.synced = source["synced"];
+	        this.skipped = source["skipped"];
+	        this.failed = source["failed"];
+	        this.skippedList = source["skippedList"];
+	        this.failedList = source["failedList"];
+	    }
+	}
 	export class CookieInfo {
 	    name: string;
 	    value: string;
@@ -733,6 +757,7 @@ export namespace config {
 	export class BrowserBookmark {
 	    name: string;
 	    url: string;
+	    openOnStart: boolean;
 
 	    static createFrom(source: any = {}) {
 	        return new BrowserBookmark(source);
@@ -742,6 +767,7 @@ export namespace config {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.url = source["url"];
+	        this.openOnStart = source["openOnStart"];
 	    }
 	}
 	export class BrowserCore {
@@ -803,6 +829,66 @@ export namespace config {
 	        this.lastTestedAt = source["lastTestedAt"];
 	        this.lastIPHealthJson = source["lastIPHealthJson"];
 	    }
+	}
+	export class ProxyCheckTarget {
+	    id: string;
+	    name: string;
+	    type: string;
+	    url: string;
+	    parser?: string;
+	    timeoutMs?: number;
+	    expectedStatus?: number[];
+
+	    static createFrom(source: any = {}) {
+	        return new ProxyCheckTarget(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.type = source["type"];
+	        this.url = source["url"];
+	        this.parser = source["parser"];
+	        this.timeoutMs = source["timeoutMs"];
+	        this.expectedStatus = source["expectedStatus"];
+	    }
+	}
+	export class ProxyCheckConfig {
+	    bridgeStartTimeoutMs: number;
+	    speedTargetId: string;
+	    ipHealthTargetId: string;
+	    targets: ProxyCheckTarget[];
+
+	    static createFrom(source: any = {}) {
+	        return new ProxyCheckConfig(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.bridgeStartTimeoutMs = source["bridgeStartTimeoutMs"];
+	        this.speedTargetId = source["speedTargetId"];
+	        this.ipHealthTargetId = source["ipHealthTargetId"];
+	        this.targets = this.convertValues(source["targets"], ProxyCheckTarget);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }

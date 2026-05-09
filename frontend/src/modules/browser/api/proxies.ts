@@ -1,4 +1,4 @@
-import type { BrowserProxy, ProxyIPHealthResult } from '../types'
+﻿import type { BrowserProxy, ProxyIPHealthResult } from '../types'
 import { getBindings, getGoApp, getMockProxies, nowISOString, setMockProxies } from './runtime'
 
 export interface ClashImportURLResult {
@@ -124,7 +124,7 @@ export async function browserProxyCheckIPHealth(proxyId: string): Promise<ProxyI
       (await bindings.BrowserProxyCheckIPHealth(proxyId)) || {
         proxyId,
         ok: false,
-        source: 'ippure',
+        source: 'ip_health',
         error: '调用失败',
         ip: '',
         fraudScore: 0,
@@ -144,7 +144,7 @@ export async function browserProxyCheckIPHealth(proxyId: string): Promise<ProxyI
   return {
     proxyId,
     ok: true,
-    source: 'ippure',
+    source: 'ip_health',
     error: '',
     ip: '127.0.0.1',
     fraudScore: Math.floor(Math.random() * 100),
@@ -169,7 +169,7 @@ export async function browserProxyBatchCheckIPHealth(proxyIds: string[], concurr
   return proxyIds.map((proxyId) => ({
     proxyId,
     ok: true,
-    source: 'ippure',
+    source: 'ip_health',
     error: '',
     ip: '127.0.0.1',
     fraudScore: Math.floor(Math.random() * 100),

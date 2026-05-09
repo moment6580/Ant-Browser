@@ -84,8 +84,26 @@ type Config struct {
 	Runtime      RuntimeConfig      `yaml:"runtime"`
 	Logging      LoggingConfig      `yaml:"logging"`
 	Browser      BrowserConfig      `yaml:"browser"`
+	ProxyCheck   ProxyCheckConfig   `yaml:"proxy_check"`
 	LaunchServer LaunchServerConfig `yaml:"launch_server"`
 	Automation   AutomationConfig   `yaml:"automation"`
+}
+
+type ProxyCheckConfig struct {
+	BridgeStartTimeoutMs int                `yaml:"bridge_start_timeout_ms" json:"bridgeStartTimeoutMs"`
+	SpeedTargetID        string             `yaml:"speed_target_id" json:"speedTargetId"`
+	IPHealthTargetID     string             `yaml:"ip_health_target_id" json:"ipHealthTargetId"`
+	Targets              []ProxyCheckTarget `yaml:"targets" json:"targets"`
+}
+
+type ProxyCheckTarget struct {
+	ID             string `yaml:"id" json:"id"`
+	Name           string `yaml:"name" json:"name"`
+	Type           string `yaml:"type" json:"type"`
+	URL            string `yaml:"url" json:"url"`
+	Parser         string `yaml:"parser,omitempty" json:"parser,omitempty"`
+	TimeoutMs      int    `yaml:"timeout_ms,omitempty" json:"timeoutMs,omitempty"`
+	ExpectedStatus []int  `yaml:"expected_status,omitempty" json:"expectedStatus,omitempty"`
 }
 
 type DatabaseConfig struct {
@@ -117,8 +135,9 @@ type RuntimeConfig struct {
 }
 
 type BrowserBookmark struct {
-	Name string `yaml:"name" json:"name"`
-	URL  string `yaml:"url" json:"url"`
+	Name        string `yaml:"name" json:"name"`
+	URL         string `yaml:"url" json:"url"`
+	OpenOnStart bool   `yaml:"open_on_start,omitempty" json:"openOnStart"`
 }
 
 type BrowserConfig struct {
