@@ -488,6 +488,7 @@ export const STRUCTURED_API_ENDPOINT_DOCS: StructuredApiEndpointDoc[] = [
     notes: [
       'selector 为空且没有任何兼容顶层选择字段时返回 400。',
       'matchMode=all 只在这个接口可用。',
+      'proxyId / proxyConfig 只影响本次启动，不覆盖实例原代理。',
     ],
   },
   {

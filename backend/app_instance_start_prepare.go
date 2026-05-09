@@ -17,6 +17,8 @@ type browserStartInput struct {
 	SkipDefaultStartURLs bool
 	PreferVisibleWindow  bool
 	ForceDirectProxy     bool
+	TemporaryProxyID     string
+	TemporaryProxyConfig string
 }
 
 type browserStartPlan struct {
@@ -34,7 +36,7 @@ type browserStartPlan struct {
 	totalReadyTimeout     time.Duration
 }
 
-func newBrowserStartInput(profileID string, extraLaunchArgs []string, startURLs []string, skipDefaultStartURLs bool, preferVisibleWindow bool, forceDirectProxy bool) browserStartInput {
+func newBrowserStartInput(profileID string, extraLaunchArgs []string, startURLs []string, skipDefaultStartURLs bool, preferVisibleWindow bool, forceDirectProxy bool, proxyID string, proxyConfig string) browserStartInput {
 	normalizedExtraLaunchArgs := normalizeNonEmptyStrings(extraLaunchArgs)
 	if preferVisibleWindow {
 		normalizedExtraLaunchArgs = ensureNewWindowLaunchArg(normalizedExtraLaunchArgs)
@@ -47,7 +49,13 @@ func newBrowserStartInput(profileID string, extraLaunchArgs []string, startURLs 
 		SkipDefaultStartURLs: skipDefaultStartURLs,
 		PreferVisibleWindow:  preferVisibleWindow,
 		ForceDirectProxy:     forceDirectProxy,
+		TemporaryProxyID:     strings.TrimSpace(proxyID),
+		TemporaryProxyConfig: strings.TrimSpace(proxyConfig),
 	}
+}
+
+func (input browserStartInput) hasTemporaryProxy() bool {
+	return strings.TrimSpace(input.TemporaryProxyID) != "" || strings.TrimSpace(input.TemporaryProxyConfig) != ""
 }
 
 func (plan *browserStartPlan) releaseBridgeIfNeeded(a *App) {

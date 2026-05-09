@@ -90,8 +90,7 @@ func (s *LaunchServer) handleLaunchWithBody(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	req.LaunchArgs = normalizeStringSlice(req.LaunchArgs)
-	req.StartURLs = normalizeStringSlice(req.StartURLs)
+	req.LaunchRequestParams = normalizeLaunchRequestParams(req.LaunchRequestParams)
 	if selector.MatchMode == launchMatchModeAll {
 		profiles, status, errMsg := s.launchAllBySelector(selector, req.LaunchRequestParams)
 		if errMsg != "" {

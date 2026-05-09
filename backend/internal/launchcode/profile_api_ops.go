@@ -60,11 +60,7 @@ func (s *LaunchServer) maybeAutoLaunchProfile(profile *browser.Profile, req Prof
 
 	params := LaunchRequestParams{}
 	if req.Start != nil {
-		params = LaunchRequestParams{
-			LaunchArgs:           normalizeStringSlice(req.Start.LaunchArgs),
-			StartURLs:            normalizeStringSlice(req.Start.StartURLs),
-			SkipDefaultStartURLs: req.Start.SkipDefaultStartURLs,
-		}
+		params = normalizeLaunchRequestParams(*req.Start)
 	}
 
 	launchedProfile, err := s.launchProfile(profile.ProfileId, params)

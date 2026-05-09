@@ -75,6 +75,14 @@ func normalizeStringSlice(items []string) []string {
 	return out
 }
 
+func normalizeLaunchRequestParams(params LaunchRequestParams) LaunchRequestParams {
+	params.LaunchArgs = normalizeStringSlice(params.LaunchArgs)
+	params.StartURLs = normalizeStringSlice(params.StartURLs)
+	params.ProxyId = strings.TrimSpace(params.ProxyId)
+	params.ProxyConfig = strings.TrimSpace(params.ProxyConfig)
+	return params
+}
+
 func remoteIP(remoteAddr string) string {
 	host, _, err := net.SplitHostPort(remoteAddr)
 	if err != nil {

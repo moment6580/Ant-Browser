@@ -30,6 +30,8 @@ type LaunchRequestParams struct {
 	LaunchArgs           []string `json:"launchArgs"`
 	StartURLs            []string `json:"startUrls"`
 	SkipDefaultStartURLs bool     `json:"skipDefaultStartUrls"`
+	ProxyId              string   `json:"proxyId"`
+	ProxyConfig          string   `json:"proxyConfig"`
 }
 
 // LaunchRequest POST /api/launch 的请求体

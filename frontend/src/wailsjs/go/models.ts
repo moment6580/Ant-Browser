@@ -899,6 +899,8 @@ export namespace launchcode {
 	    launchArgs: string[];
 	    startUrls: string[];
 	    skipDefaultStartUrls: boolean;
+	    proxyId: string;
+	    proxyConfig: string;
 
 	    static createFrom(source: any = {}) {
 	        return new LaunchRequestParams(source);
@@ -909,6 +911,8 @@ export namespace launchcode {
 	        this.launchArgs = source["launchArgs"];
 	        this.startUrls = source["startUrls"];
 	        this.skipDefaultStartUrls = source["skipDefaultStartUrls"];
+	        this.proxyId = source["proxyId"];
+	        this.proxyConfig = source["proxyConfig"];
 	    }
 	}
 

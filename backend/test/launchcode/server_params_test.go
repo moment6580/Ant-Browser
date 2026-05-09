@@ -93,6 +93,53 @@ func TestLaunchWithParams(t *testing.T) {
 	}
 }
 
+func TestLaunchWithTemporaryProxyParams(t *testing.T) {
+	svc := newInMemoryService()
+	starter := newMockStarterWithParams()
+	starter.addProfile(&browser.Profile{
+		ProfileId:      "profile-temporary-proxy",
+		ProfileName:    "temporary-proxy",
+		ProxyId:        "stored-proxy",
+		ProxyConfig:    "http://127.0.0.1:18080",
+		Pid:            322,
+		DebugPort:      9556,
+		DebugReady:     true,
+		Running:        true,
+		LastStartAt:    "2026-05-09T00:00:00Z",
+		LastError:      "",
+		LaunchCode:     "",
+		RuntimeWarning: "",
+	})
+
+	code, err := svc.EnsureCode("profile-temporary-proxy")
+	if err != nil {
+		t.Fatalf("EnsureCode 失败: %v", err)
+	}
+
+	handler := buildTestHandler(svc, starter)
+	body := map[string]interface{}{
+		"code":        code,
+		"proxyConfig": " http://127.0.0.1:28080 ",
+	}
+	payload, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/launch", bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("期望 200，实际 %d，body=%s", w.Code, w.Body.String())
+	}
+	if starter.lastParams.ProxyConfig != "http://127.0.0.1:28080" {
+		t.Fatalf("一次性 proxyConfig 未透传或未归一化: %+v", starter.lastParams)
+	}
+	profile := starter.profiles["profile-temporary-proxy"]
+	if profile.ProxyConfig != "http://127.0.0.1:18080" || profile.ProxyId != "stored-proxy" {
+		t.Fatalf("启动接口不应覆盖实例原代理: %+v", profile)
+	}
+}
+
 func TestLaunchWithParamsUsingCodeAsKeywordFallback(t *testing.T) {
 	svc := newInMemoryService()
 	starter := newMockStarterWithParams()

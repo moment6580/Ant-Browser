@@ -85,8 +85,7 @@ func (s *LaunchServer) handleRuntimeSession(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	req.LaunchArgs = normalizeStringSlice(req.LaunchArgs)
-	req.StartURLs = normalizeStringSlice(req.StartURLs)
+	req.LaunchRequestParams = normalizeLaunchRequestParams(req.LaunchRequestParams)
 	profile, launchCode, status, errMsg := s.launchBySelector(selector, req.LaunchRequestParams)
 	if errMsg != "" {
 		writeJSON(w, status, map[string]interface{}{

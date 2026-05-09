@@ -14,7 +14,8 @@ func (a *App) StartInstance(profileId string) (*browser.Profile, error) {
 
 // StartInstanceWithParams 实现 launchcode.BrowserStarterWithParams 接口
 func (a *App) StartInstanceWithParams(profileId string, params launchcode.LaunchRequestParams) (*browser.Profile, error) {
-	return a.BrowserInstanceStartWithParams(profileId, params.LaunchArgs, params.StartURLs, params.SkipDefaultStartURLs)
+	preferVisibleWindow := shouldPreferVisibleWindowForStartWithParams(params.StartURLs)
+	return a.browserInstanceStartInternal(profileId, params.LaunchArgs, params.StartURLs, params.SkipDefaultStartURLs, preferVisibleWindow, false, params.ProxyId, params.ProxyConfig)
 }
 
 // StatusInstance 实现 launchcode.BrowserStatusProvider 接口
